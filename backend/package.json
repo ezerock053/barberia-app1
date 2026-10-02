@@ -1,0 +1,21 @@
+{
+    "name":  "barberia-backend",
+    "private":  true,
+    "version":  "1.0.0",
+    "main":  "src/server.js",
+    "scripts":  {
+                    "dev":  "node --watch src/server.js",
+                    "start":  "node src/server.js",
+                    "test":  "node --test",
+                    "db:migrate":  "sequelize-cli --config config/config.js --migrations-path migrations db:migrate"
+                },
+    "dependencies":  {
+                         "dotenv":  "^16.4.7",
+                         "express":  "^5.1.0",
+                         "mysql2":  "^3.14.0",
+                         "sequelize":  "^6.37.7"
+                     },
+    "devDependencies":  {
+                            "sequelize-cli":  "^6.6.3"
+                        }
+}
