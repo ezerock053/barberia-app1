@@ -9,12 +9,20 @@ const appointmentsRouter = require('./routes/appointments');
 const availabilityRouter = require('./routes/availability');
 const createAuthRouter = require('./routes/auth');
 const { createSessionMiddleware } = require('./middleware/session');
+const { sequelize } = require('./models');
 
 const app = express();
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
-app.use(createSessionMiddleware());
+const sessionMiddleware = createSessionMiddleware();
+app.use(sessionMiddleware);
 app.use(express.json());
-app.use('/api/auth', createAuthRouter());
+app.use('/api/auth', createAuthRouter({
+  invalidateSessions: (transaction) => sessionMiddleware.sessionStore.sessionModel.destroy({
+    where: {},
+    transaction,
+  }),
+  sequelizeInstance: sequelize,
+}));
 app.use('/api/services', servicesRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/appointments', appointmentsRouter);

@@ -9,6 +9,7 @@ export default function AdminLoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const returnTo = safeAdminReturnTo(new URLSearchParams(window.location.search).get('redirect'));
+  const passwordChanged = new URLSearchParams(window.location.search).get('passwordChanged') === '1';
 
   async function submit(event) {
     event.preventDefault();
@@ -34,6 +35,7 @@ export default function AdminLoginPage() {
             <div className="eyebrow mt-4">ACCESO ADMINISTRATIVO</div>
             <h1>Ingresar</h1>
             <p className="admin-auth-copy">Usá las credenciales de administrador para continuar.</p>
+            {passwordChanged && <Alert variant="success" role="status">La contraseña se cambió. Ingresá con tu nueva contraseña.</Alert>}
             {error && <Alert variant="danger" role="alert">{error}</Alert>}
             <Form onSubmit={submit}>
               <Form.Group className="mb-3" controlId="admin-email">

@@ -14,7 +14,7 @@ function createSessionMiddleware() {
   const SequelizeStore = SequelizeStoreFactory(session.Store);
   const store = new SequelizeStore({ db: sequelize, tableName: 'Sessions' });
 
-  return session({
+  const middleware = session({
     name: 'connect.sid',
     secret,
     store,
@@ -29,6 +29,10 @@ function createSessionMiddleware() {
       path: '/',
     },
   });
+
+  // Expose the configured store to the auth router for global session invalidation.
+  middleware.sessionStore = store;
+  return middleware;
 }
 
 module.exports = { createSessionMiddleware, SESSION_DURATION_MS };

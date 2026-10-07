@@ -4,6 +4,7 @@ import AppointmentsPage from './AppointmentsPage.jsx';
 import ServicesPage from './ServicesPage.jsx';
 import BarbersPage from './BarbersPage.jsx';
 import SchedulesPage from './SchedulesPage.jsx';
+import ChangePasswordPage from './ChangePasswordPage.jsx';
 
 const sections = [
   { path: '/admin', label: 'Resumen' },
@@ -11,6 +12,7 @@ const sections = [
   { path: '/admin/services', label: 'Servicios' },
   { path: '/admin/barbers', label: 'Barberos' },
   { path: '/admin/schedules', label: 'Horarios' },
+  { path: '/admin/password', label: 'Cambiar contraseña' },
 ];
 
 const pages = {
@@ -19,6 +21,7 @@ const pages = {
   '/admin/services': [ServicesPage, 'Servicios'],
   '/admin/barbers': [BarbersPage, 'Barberos'],
   '/admin/schedules': [SchedulesPage, 'Horarios'],
+  '/admin/password': [ChangePasswordPage, 'Cambiar contraseña'],
 };
 
 export default function AdminLayout({ onLogout, logoutError }) {
