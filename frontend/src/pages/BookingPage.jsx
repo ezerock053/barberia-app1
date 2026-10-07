@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
-import { ApiError, createAppointment, createCustomer, getAvailability, getBarbers, getServices } from '../services/api.js';
+import { ApiError, createAppointment, getAvailability, getBarbers, getServices } from '../services/api.js';
 
 const steps = ['Servicio', 'Barbero', 'Fecha y hora', 'Tus datos', 'Confirmación'];
 const emptyCustomer = { name: '', phone: '', email: '', notes: '' };
@@ -35,7 +35,6 @@ export default function BookingPage() {
   const [selectedSlot, setSelectedSlot] = useState('');
   const [slots, setSlots] = useState([]);
   const [customer, setCustomer] = useState(emptyCustomer);
-  const [savedCustomerId, setSavedCustomerId] = useState(null);
   const [step, setStep] = useState(1);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -84,7 +83,6 @@ export default function BookingPage() {
 
   function updateCustomer(field, value) {
     setCustomer((current) => ({ ...current, [field]: value }));
-    setSavedCustomerId(null);
   }
 
   function goNext() {
@@ -111,13 +109,12 @@ export default function BookingPage() {
     setError('');
     setSubmitting(true);
     try {
-      const customerResult = savedCustomerId
-        ? { id: savedCustomerId }
-        : await createCustomer({ name: customer.name.trim(), phone: customer.phone.trim(), email: customer.email.trim() });
-      if (!customerResult?.id) throw new Error('El servidor no devolvió el identificador del cliente.');
-      setSavedCustomerId(customerResult.id);
       await createAppointment({
-        customerId: customerResult.id,
+        customer: {
+          name: customer.name.trim(),
+          phone: customer.phone.trim(),
+          email: customer.email.trim(),
+        },
         barberId: Number(barberId),
         serviceId: Number(serviceId),
         startAt: `${date} ${selectedSlot}:00`,

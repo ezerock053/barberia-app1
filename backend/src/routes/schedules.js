@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { Barber, WorkingSchedule } = require('../models');
+const { Barber, WorkingSchedule, sequelize } = require('../models');
 const requireAdmin = require('../middleware/requireAdmin');
 
 const router = express.Router({ mergeParams: true });
@@ -83,11 +83,13 @@ router.post('/', requireAdmin, async (req, res) => {
   if (validationError) return res.status(400).json({ error: validationError });
 
   try {
-    const barber = await Barber.findByPk(barberId);
-    if (!barber) return res.status(404).json({ error: 'Barber not found' });
-
-    const schedule = await WorkingSchedule.create({ ...req.body, barberId });
-    return res.status(201).json(schedule);
+    const result = await sequelize.transaction(async (transaction) => {
+      const barber = await Barber.findByPk(barberId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!barber) return { status: 404, body: { error: 'Barber not found' } };
+      const schedule = await WorkingSchedule.create({ ...req.body, barberId }, { transaction });
+      return { status: 201, body: schedule };
+    });
+    return res.status(result.status).json(result.body);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return res.status(409).json({ error: 'A schedule already exists for this barber and day' });
@@ -103,31 +105,37 @@ router.put('/:id', requireAdmin, async (req, res) => {
   if (!scheduleId) return res.status(400).json({ error: 'Invalid schedule ID' });
 
   try {
-    const barber = await Barber.findByPk(barberId);
-    if (!barber) return res.status(404).json({ error: 'Barber not found' });
+    const result = await sequelize.transaction(async (transaction) => {
+      const barber = await Barber.findByPk(barberId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!barber) return { status: 404, body: { error: 'Barber not found' } };
+      const schedule = await WorkingSchedule.findOne({
+        where: { id: scheduleId, barberId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!schedule) return { status: 404, body: { error: 'Schedule not found' } };
 
-    const schedule = await WorkingSchedule.findOne({ where: { id: scheduleId, barberId } });
-    if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
+      const body = req.body;
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return { status: 400, body: { error: 'A JSON object is required' } };
+      }
+      const keys = Object.keys(body);
+      if (keys.length === 0 || keys.some((key) => !editableFields.includes(key))) {
+        return { status: 400, body: { error: 'Provide valid schedule fields to update' } };
+      }
 
-    const body = req.body;
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return res.status(400).json({ error: 'A JSON object is required' });
-    }
-    const keys = Object.keys(body);
-    if (keys.length === 0 || keys.some((key) => !editableFields.includes(key))) {
-      return res.status(400).json({ error: 'Provide valid schedule fields to update' });
-    }
+      const updates = {
+        dayOfWeek: Object.hasOwn(body, 'dayOfWeek') ? body.dayOfWeek : schedule.dayOfWeek,
+        startTime: Object.hasOwn(body, 'startTime') ? body.startTime : schedule.startTime,
+        endTime: Object.hasOwn(body, 'endTime') ? body.endTime : schedule.endTime,
+      };
+      const validationError = validateSchedule(updates);
+      if (validationError) return { status: 400, body: { error: validationError } };
 
-    const updates = {
-      dayOfWeek: Object.hasOwn(body, 'dayOfWeek') ? body.dayOfWeek : schedule.dayOfWeek,
-      startTime: Object.hasOwn(body, 'startTime') ? body.startTime : schedule.startTime,
-      endTime: Object.hasOwn(body, 'endTime') ? body.endTime : schedule.endTime,
-    };
-    const validationError = validateSchedule(updates);
-    if (validationError) return res.status(400).json({ error: validationError });
-
-    await schedule.update(updates);
-    return res.status(200).json(schedule);
+      await schedule.update(updates, { transaction });
+      return { status: 200, body: schedule };
+    });
+    return res.status(result.status).json(result.body);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return res.status(409).json({ error: 'A schedule already exists for this barber and day' });
@@ -143,14 +151,19 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   if (!scheduleId) return res.status(400).json({ error: 'Invalid schedule ID' });
 
   try {
-    const barber = await Barber.findByPk(barberId);
-    if (!barber) return res.status(404).json({ error: 'Barber not found' });
-
-    const schedule = await WorkingSchedule.findOne({ where: { id: scheduleId, barberId } });
-    if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
-
-    await schedule.destroy();
-    return res.status(200).json({ message: 'Schedule deleted' });
+    const result = await sequelize.transaction(async (transaction) => {
+      const barber = await Barber.findByPk(barberId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!barber) return { status: 404, body: { error: 'Barber not found' } };
+      const schedule = await WorkingSchedule.findOne({
+        where: { id: scheduleId, barberId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!schedule) return { status: 404, body: { error: 'Schedule not found' } };
+      await schedule.destroy({ transaction });
+      return { status: 200, body: { message: 'Schedule deleted' } };
+    });
+    return res.status(result.status).json(result.body);
   } catch {
     return res.status(500).json({ error: 'Internal server error' });
   }
