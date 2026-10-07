@@ -1,21 +1,26 @@
 {
-    "name":  "barberia-backend",
-    "private":  true,
-    "version":  "1.0.0",
-    "main":  "src/server.js",
-    "scripts":  {
-                    "dev":  "node --watch src/server.js",
-                    "start":  "node src/server.js",
-                    "test":  "node --test",
-                    "db:migrate":  "sequelize-cli --config config/config.js --migrations-path migrations db:migrate"
-                },
-    "dependencies":  {
-                         "dotenv":  "^16.4.7",
-                         "express":  "^5.1.0",
-                         "mysql2":  "^3.14.0",
-                         "sequelize":  "^6.37.7"
-                     },
-    "devDependencies":  {
-                            "sequelize-cli":  "^6.6.3"
-                        }
+    "name": "barberia-backend",
+    "private": true,
+    "version": "1.0.0",
+    "main": "src/server.js",
+    "scripts": {
+        "dev": "node --watch src/server.js",
+        "start": "node src/server.js",
+        "test": "node --test",
+        "db:migrate": "sequelize-cli --config config/config.js --migrations-path migrations db:migrate",
+        "db:seed": "sequelize-cli --config config/config.js --seeders-path seeders db:seed:all",
+        "db:create-admin": "node scripts/create-admin.js"
+    },
+    "dependencies": {
+        "bcryptjs": "^3.0.3",
+        "connect-session-sequelize": "^7.1.7",
+        "dotenv": "^16.4.7",
+        "express": "^5.1.0",
+        "express-session": "^1.19.0",
+        "mysql2": "^3.14.0",
+        "sequelize": "^6.37.7"
+    },
+    "devDependencies": {
+        "sequelize-cli": "^6.6.3"
+    }
 }

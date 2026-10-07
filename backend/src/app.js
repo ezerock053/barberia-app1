@@ -7,9 +7,14 @@ const schedulesRouter = require('./routes/schedules');
 const customersRouter = require('./routes/customers');
 const appointmentsRouter = require('./routes/appointments');
 const availabilityRouter = require('./routes/availability');
+const createAuthRouter = require('./routes/auth');
+const { createSessionMiddleware } = require('./middleware/session');
 
 const app = express();
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+app.use(createSessionMiddleware());
 app.use(express.json());
+app.use('/api/auth', createAuthRouter());
 app.use('/api/services', servicesRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/appointments', appointmentsRouter);

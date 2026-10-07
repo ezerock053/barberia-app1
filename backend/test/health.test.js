@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+process.env.SESSION_SECRET ||= 'test-secret-that-is-at-least-32-characters-long';
 const app = require('../src/app');
 
 test('backend inicia y responde en /health', async (t) => {

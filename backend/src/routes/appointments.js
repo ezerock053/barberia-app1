@@ -3,6 +3,8 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const { Appointment, Barber, Customer, Service } = require('../models');
+const { getReservationWindowError } = require('../utils/reservationWindow');
+const requireAdmin = require('../middleware/requireAdmin');
 
 const router = express.Router();
 const statuses = ['pending', 'confirmed', 'completed', 'cancelled', 'no_show'];
@@ -138,7 +140,7 @@ function buildWhere(query) {
   return { where };
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireAdmin, async (req, res) => {
   const parsed = buildWhere(req.query);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
   try {
@@ -153,7 +155,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid appointment ID' });
   try {
@@ -166,25 +168,31 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const validationError = validateBody(req.body, ['customerId', 'barberId', 'serviceId', 'startAt']);
+  const publicBody = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? { ...req.body }
+    : req.body;
+  if (publicBody && typeof publicBody === 'object') delete publicBody.status;
+  const validationError = validateBody(publicBody, ['customerId', 'barberId', 'serviceId', 'startAt']);
   if (validationError) return res.status(400).json({ error: validationError });
-  const startAt = parseDateTime(req.body.startAt);
+  const startAt = parseDateTime(publicBody.startAt);
   try {
-    const relations = await findActiveRelations(req.body);
+    const relations = await findActiveRelations(publicBody);
     if (relations.error) return res.status(relations.status).json({ error: relations.error });
+    const reservationWindowError = getReservationWindowError(startAt);
+    if (reservationWindowError) return res.status(400).json({ error: reservationWindowError });
     if (await hasScheduleConflict(req.body.barberId, startAt)) {
       return res.status(409).json({ error: 'Barber already has an appointment at this time' });
     }
     const appointment = await Appointment.create({
-      customerId: req.body.customerId,
-      barberId: req.body.barberId,
-      serviceId: req.body.serviceId,
+      customerId: publicBody.customerId,
+      barberId: publicBody.barberId,
+      serviceId: publicBody.serviceId,
       startAt,
       endAt: endTimeFor(startAt),
       serviceName: relations.service.name,
       servicePrice: relations.service.price,
-      notes: req.body.notes ?? null,
-      status: req.body.status ?? 'pending',
+      notes: publicBody.notes ?? null,
+      status: 'pending',
     });
     await appointment.reload({ include: associations });
     return res.status(201).json(appointment);
@@ -193,7 +201,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid appointment ID' });
   try {
@@ -229,6 +237,13 @@ router.put('/:id', async (req, res) => {
     }
     const willBeActive = (updates.status ?? appointment.status) !== 'cancelled';
     const reactivating = appointment.status === 'cancelled' && willBeActive;
+    const reservationChanged = Object.hasOwn(req.body, 'startAt')
+      || Object.hasOwn(req.body, 'barberId')
+      || reactivating;
+    if (reservationChanged && willBeActive) {
+      const reservationWindowError = getReservationWindowError(startAt);
+      if (reservationWindowError) return res.status(400).json({ error: reservationWindowError });
+    }
     if ((scheduleChanged || reactivating) && willBeActive && await hasScheduleConflict(barberId, startAt, id)) {
       return res.status(409).json({ error: 'Barber already has an appointment at this time' });
     }
@@ -244,7 +259,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid appointment ID' });
   try {

@@ -2,6 +2,7 @@
 
 const express = require('express');
 const { Barber } = require('../models');
+const requireAdmin = require('../middleware/requireAdmin');
 
 const router = express.Router();
 const editableFields = ['name', 'phone', 'image', 'active'];
@@ -21,10 +22,12 @@ function isValidOptionalText(value, maxLength) {
   );
 }
 
-router.get('/', async (_req, res) => {
+router.get('/', (req, res, next) => req.query.includeInactive === 'true'
+  ? requireAdmin(req, res, next)
+  : next(), async (req, res) => {
   try {
     const barbers = await Barber.findAll({
-      where: { active: true },
+      ...(req.query.includeInactive === 'true' ? {} : { where: { active: true } }),
       order: [['name', 'ASC']],
     });
 
@@ -34,7 +37,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid barber ID' });
 
@@ -47,7 +50,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return res.status(400).json({ error: 'A JSON object is required' });
@@ -75,7 +78,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid barber ID' });
 
@@ -125,7 +128,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid barber ID' });
 

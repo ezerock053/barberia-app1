@@ -3,6 +3,7 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const { Appointment, Barber, WorkingSchedule } = require('../models');
+const { isWithinReservationWindow } = require('../utils/reservationWindow');
 
 const router = express.Router();
 
@@ -67,10 +68,14 @@ router.get('/', async (req, res) => {
     }));
 
     const availableSlots = [];
+    const now = new Date();
     let slotStart = Math.ceil(startMinute / 60) * 60;
     while (slotStart + 60 <= endMinute) {
       const slot = `${String(Math.floor(slotStart / 60)).padStart(2, '0')}:${String(slotStart % 60).padStart(2, '0')}`;
-      if (!occupiedSlots.has(slot)) availableSlots.push(slot);
+      const slotAt = new Date(date.getTime() + slotStart * 60 * 1000);
+      if (!occupiedSlots.has(slot) && isWithinReservationWindow(slotAt, now)) {
+        availableSlots.push(slot);
+      }
       slotStart += 60;
     }
 

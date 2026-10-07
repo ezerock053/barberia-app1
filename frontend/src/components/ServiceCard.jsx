@@ -1,0 +1,2 @@
+import { Card } from 'react-bootstrap';
+export default function ServiceCard({ service }) { return <Card className="service-card h-100"><Card.Body><div className="service-symbol">✦</div><Card.Title>{service.name}</Card.Title><Card.Text>{service.description || 'Un servicio pensado para que salgas impecable.'}</Card.Text><div className="service-price">${Number(service.price).toLocaleString('es-AR')}</div></Card.Body></Card>; }

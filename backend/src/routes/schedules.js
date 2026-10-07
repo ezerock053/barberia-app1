@@ -2,6 +2,7 @@
 
 const express = require('express');
 const { Barber, WorkingSchedule } = require('../models');
+const requireAdmin = require('../middleware/requireAdmin');
 
 const router = express.Router({ mergeParams: true });
 const editableFields = ['dayOfWeek', 'startTime', 'endTime'];
@@ -56,7 +57,7 @@ function isUniqueConstraintError(error) {
   return error.name === 'SequelizeUniqueConstraintError' || error.original?.code === 'ER_DUP_ENTRY';
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireAdmin, async (req, res) => {
   const barberId = parseId(req.params.barberId);
   if (!barberId) return res.status(400).json({ error: 'Invalid barber ID' });
 
@@ -74,7 +75,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const barberId = parseId(req.params.barberId);
   if (!barberId) return res.status(400).json({ error: 'Invalid barber ID' });
 
@@ -95,7 +96,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const barberId = parseId(req.params.barberId);
   const scheduleId = parseId(req.params.id);
   if (!barberId) return res.status(400).json({ error: 'Invalid barber ID' });
@@ -135,7 +136,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const barberId = parseId(req.params.barberId);
   const scheduleId = parseId(req.params.id);
   if (!barberId) return res.status(400).json({ error: 'Invalid barber ID' });

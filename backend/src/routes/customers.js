@@ -2,6 +2,7 @@
 
 const express = require('express');
 const { Customer } = require('../models');
+const requireAdmin = require('../middleware/requireAdmin');
 
 const router = express.Router();
 const editableFields = ['name', 'phone', 'email'];
@@ -48,7 +49,7 @@ function isForeignKeyConstraintError(error) {
     || error.original?.code === 'ER_ROW_IS_REFERENCED';
 }
 
-router.get('/', async (_req, res) => {
+router.get('/', requireAdmin, async (_req, res) => {
   try {
     const customers = await Customer.findAll({ order: [['name', 'ASC']] });
     return res.status(200).json(customers);
@@ -57,7 +58,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid customer ID' });
 
@@ -86,7 +87,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid customer ID' });
 
@@ -114,7 +115,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid customer ID' });
 

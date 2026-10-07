@@ -1,0 +1,2 @@
+import { Card } from 'react-bootstrap';
+export default function BarberCard({ barber }) { return <Card className="barber-card h-100">{barber.image ? <Card.Img variant="top" src={barber.image} alt={barber.name} /> : <div className="barber-placeholder" aria-label="Retrato no disponible"><span>{barber.name?.charAt(0)?.toUpperCase() || 'B'}</span></div>}<Card.Body><div className="eyebrow">BARBERO</div><Card.Title>{barber.name}</Card.Title></Card.Body></Card>; }

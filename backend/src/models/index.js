@@ -7,6 +7,7 @@ const Barber = require('./barber');
 const WorkingSchedule = require('./workingSchedule');
 const Customer = require('./customer');
 const Appointment = require('./appointment');
+const AdminUser = require('./adminUser');
 
 const sequelize = new Sequelize(config.database, config.username, config.password, {
   host: config.host,
@@ -21,6 +22,7 @@ const models = {
   WorkingSchedule: WorkingSchedule(sequelize, DataTypes),
   Customer: Customer(sequelize, DataTypes),
   Appointment: Appointment(sequelize, DataTypes),
+  AdminUser: AdminUser(sequelize, DataTypes),
 };
 
 models.Barber.hasMany(models.WorkingSchedule, {
