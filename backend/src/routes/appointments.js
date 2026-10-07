@@ -201,7 +201,7 @@ router.get('/:id', requireAdmin, async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const publicFields = ['customer', 'barberId', 'serviceId', 'startAt', 'notes'];
+  const publicFields = ['customer', 'barberId', 'serviceId', 'startAt', 'notes', 'paymentMethod'];
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
     return res.status(400).json({ error: 'A JSON object is required' });
   }
@@ -214,7 +214,8 @@ router.post('/', async (req, res) => {
   const validationError = missingField
     ? `${missingField} is required`
     : validateBody({ barberId: publicBody.barberId, serviceId: publicBody.serviceId, startAt: publicBody.startAt, ...(Object.hasOwn(publicBody, 'notes') ? { notes: publicBody.notes } : {}) }, ['barberId', 'serviceId', 'startAt'])
-      || validateBookingCustomer(publicBody.customer);
+      || validateBookingCustomer(publicBody.customer)
+      || (!['cash', 'mercado_pago'].includes(publicBody.paymentMethod) ? 'paymentMethod must be cash or mercado_pago' : null);
   if (validationError) return res.status(400).json({ error: validationError });
   const startAt = parseDateTime(publicBody.startAt);
   const barberId = Number(publicBody.barberId);
@@ -255,6 +256,8 @@ router.post('/', async (req, res) => {
         endAt: endTimeFor(startAt),
         serviceName: service.name,
         servicePrice: service.price,
+        paymentMethod: publicBody.paymentMethod,
+        paymentStatus: 'pending',
         notes: publicBody.notes?.trim() || null,
         status: 'pending',
       }, { transaction });

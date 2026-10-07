@@ -59,6 +59,21 @@ module.exports = (sequelize, DataTypes) => {
           isIn: [['pending', 'confirmed', 'completed', 'cancelled', 'no_show']],
         },
       },
+      paymentMethod: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        validate: {
+          isIn: [['cash', 'mercado_pago']],
+        },
+      },
+      paymentStatus: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        defaultValue: 'pending',
+        validate: {
+          isIn: [['pending', 'paid', 'rejected', 'cancelled']],
+        },
+      },
       serviceName: {
         type: DataTypes.STRING,
         allowNull: false,

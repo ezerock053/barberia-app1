@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Card, Col, Row, Spinner, Table } from 'react-bootstrap';
 import { getAdminBarbers, getAdminServices, getAppointments } from '../services/api.js';
-import { formatAppointmentDate, formatPrice, localDateString, statusLabels, statusVariants } from './adminUtils.js';
+import { formatAppointmentDate, formatPrice, localDateString, paymentMethodLabels, paymentStatusLabels, statusLabels, statusVariants } from './adminUtils.js';
 
 const emptyData = { today: [], pending: [], confirmed: [], services: [], barbers: [], upcoming: [] };
 
@@ -55,13 +55,14 @@ export default function DashboardPage() {
       <Card.Header><div><strong>Próximos turnos</strong><span>Agenda próxima</span></div><a href="/admin/appointments">Ver todos</a></Card.Header>
       <Card.Body className="p-0">
         {data.upcoming.length ? <div className="table-responsive"><Table className="admin-table align-middle mb-0">
-          <thead><tr><th>Fecha y hora</th><th>Cliente</th><th>Servicio</th><th>Barbero</th><th>Precio</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Fecha y hora</th><th>Cliente</th><th>Servicio</th><th>Barbero</th><th>Precio</th><th>Pago</th><th>Estado</th></tr></thead>
           <tbody>{data.upcoming.map((appointment) => <tr key={appointment.id}>
             <td>{formatAppointmentDate(appointment.startAt)}</td>
             <td><strong>{appointment.customer?.name || '—'}</strong><small>{appointment.customer?.phone || ''}</small></td>
             <td>{appointment.serviceName || appointment.service?.name || '—'}</td>
             <td>{appointment.barber?.name || '—'}</td>
             <td>{formatPrice(appointment.servicePrice)}</td>
+            <td><strong>{paymentMethodLabels[appointment.paymentMethod] || 'No especificado'}</strong><small>{paymentStatusLabels[appointment.paymentStatus] || 'Pendiente'}</small></td>
             <td><Badge bg={statusVariants[appointment.status] || 'secondary'}>{statusLabels[appointment.status] || appointment.status}</Badge></td>
           </tr>)}</tbody>
         </Table></div> : <p className="admin-empty mb-0">No hay próximos turnos agendados.</p>}

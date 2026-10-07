@@ -48,6 +48,7 @@ function validReservation() {
     barberId: 1,
     serviceId: 1,
     startAt: `${start.toISOString().slice(0, 10)} ${start.toISOString().slice(11, 19)}`,
+    paymentMethod: 'cash',
     status: 'confirmed',
   };
 }
@@ -118,7 +119,7 @@ test('sesión admin activa puede listar catálogos incluyendo inactivos', async 
   });
 });
 
-test('reserva pública crea cliente y turno en una transacción, ignora status y devuelve solo confirmación mínima', async (t) => {
+test('reserva pública con efectivo crea cliente y turno en una transacción, ignora status y devuelve solo confirmación mínima', async (t) => {
   mockTransaction(t);
   const barberLock = t.mock.method(Barber, 'findAll', async (options) => {
     assert.equal(options.lock, 'UPDATE');
@@ -154,9 +155,56 @@ test('reserva pública crea cliente y turno en una transacción, ignora status y
     assert.equal(JSON.stringify(body).includes('cliente@example.com'), false);
     assert.equal(barberLock.mock.callCount(), 1);
     assert.equal(create.mock.calls[0].arguments[0].status, 'pending');
+    assert.equal(create.mock.calls[0].arguments[0].paymentStatus, 'pending');
+    assert.equal(create.mock.calls[0].arguments[0].paymentMethod, 'cash');
     assert.equal(create.mock.calls[0].arguments[0].customerId, 31);
     assert.equal(create.mock.calls[0].arguments[0].barberId, 1);
     assert.equal(create.mock.calls[0].arguments[0].serviceId, 1);
+  });
+});
+
+test('reserva pública con Mercado Pago comienza con pago pendiente', async (t) => {
+  mockTransaction(t);
+  const startAt = new Date(`${validReservation().startAt.replace(' ', 'T')}Z`);
+  t.mock.method(Barber, 'findAll', async () => [{ id: 1, active: true }]);
+  t.mock.method(WorkingSchedule, 'findOne', async () => scheduleFor(startAt));
+  t.mock.method(Service, 'findByPk', async () => ({ id: 1, active: true, name: 'Corte', price: '12000.00' }));
+  t.mock.method(Appointment, 'findOne', async () => null);
+  t.mock.method(Customer, 'create', async () => ({ id: 31 }));
+  const create = t.mock.method(Appointment, 'create', async (values) => ({ id: 99, ...values }));
+  await withServer(t, {}, async (base) => {
+    const response = await fetch(`${base}/api/appointments`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...validReservation(), paymentMethod: 'mercado_pago' }),
+    });
+    assert.equal(response.status, 201);
+    assert.equal(create.mock.calls[0].arguments[0].paymentMethod, 'mercado_pago');
+    assert.equal(create.mock.calls[0].arguments[0].paymentStatus, 'pending');
+    assert.equal(create.mock.calls[0].arguments[0].status, 'pending');
+  });
+});
+
+test('reserva pública rechaza método de pago inválido', async (t) => {
+  const createCustomer = t.mock.method(Customer, 'create', async () => ({ id: 1 }));
+  await withServer(t, {}, async (base) => {
+    const response = await fetch(`${base}/api/appointments`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...validReservation(), paymentMethod: 'crypto' }),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(createCustomer.mock.callCount(), 0);
+  });
+});
+
+test('reserva pública rechaza paymentStatus enviado por el cliente', async (t) => {
+  const createCustomer = t.mock.method(Customer, 'create', async () => ({ id: 1 }));
+  await withServer(t, {}, async (base) => {
+    const response = await fetch(`${base}/api/appointments`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...validReservation(), paymentStatus: 'paid' }),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(createCustomer.mock.callCount(), 0);
   });
 });
 

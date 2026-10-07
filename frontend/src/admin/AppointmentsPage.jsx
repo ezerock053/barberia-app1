@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Form, Spinner, Table } from 'react-bootstrap';
 import { getAdminBarbers, getAppointments, updateAppointment } from '../services/api.js';
-import { appointmentStatuses, formatAppointmentDate, formatPrice, statusLabels, statusVariants } from './adminUtils.js';
+import { appointmentStatuses, formatAppointmentDate, formatPrice, paymentMethodLabels, paymentStatusLabels, statusLabels, statusVariants } from './adminUtils.js';
 
 export default function AppointmentsPage() {
   const [barbers, setBarbers] = useState([]);
@@ -54,13 +54,14 @@ export default function AppointmentsPage() {
     {error && <Alert variant="warning" dismissible onClose={() => setError('')}>{error}</Alert>}
     <div className="admin-card table-responsive">
       {loading ? <div className="admin-loading"><Spinner animation="border" role="status" /><span>Cargando turnos…</span></div> : appointments.length ? <Table className="admin-table align-middle mb-0">
-        <thead><tr><th>Cliente</th><th>Servicio</th><th>Barbero</th><th>Fecha y hora</th><th>Precio</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Cliente</th><th>Servicio</th><th>Barbero</th><th>Fecha y hora</th><th>Precio</th><th>Pago</th><th>Estado</th></tr></thead>
         <tbody>{appointments.map((appointment) => <tr key={appointment.id}>
           <td><strong>{appointment.customer?.name || '—'}</strong><small>{appointment.customer?.phone || 'Sin teléfono'}</small><small>{appointment.customer?.email || ''}</small></td>
           <td><strong>{appointment.serviceName || appointment.service?.name || '—'}</strong></td>
           <td>{appointment.barber?.name || '—'}</td>
           <td>{formatAppointmentDate(appointment.startAt)}</td>
           <td>{formatPrice(appointment.servicePrice)}</td>
+          <td><strong>{paymentMethodLabels[appointment.paymentMethod] || 'No especificado'}</strong><small>{paymentStatusLabels[appointment.paymentStatus] || 'Pendiente'}</small></td>
           <td><div className="d-flex flex-column gap-2"><Badge bg={statusVariants[appointment.status] || 'secondary'} className="align-self-start">{statusLabels[appointment.status] || appointment.status}</Badge><Form.Select aria-label={`Cambiar estado del turno ${appointment.id}`} size="sm" value={appointment.status} disabled={changingId === appointment.id} onChange={(event) => changeStatus(appointment, event.target.value)}>{appointmentStatuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</Form.Select></div></td>
         </tr>)}</tbody>
       </Table> : <p className="admin-empty mb-0">No hay turnos que coincidan con estos filtros.</p>}
