@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Form, Spinner, Table } from 'react-bootstrap';
+import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 import { getAdminBarbers, getAppointments, updateAppointment } from '../services/api.js';
-import { appointmentStatuses, formatAppointmentDate, formatPrice, paymentMethodLabels, paymentStatusLabels, statusLabels, statusVariants } from './adminUtils.js';
+import { appointmentStatuses, statusLabels } from './adminUtils.js';
+import { AppointmentCard } from './AppointmentActions.jsx';
+import { agendaDateString } from './agendaTime.js';
 
 export default function AppointmentsPage() {
   const [barbers, setBarbers] = useState([]);
   const [appointments, setAppointments] = useState([]);
-  const [filters, setFilters] = useState({ date: '', barberId: '', status: '' });
+  const [filters, setFilters] = useState(() => ({ date: agendaDateString(), barberId: '', status: '' }));
   const [loading, setLoading] = useState(true);
   const [changingId, setChangingId] = useState(null);
   const [error, setError] = useState('');
+  const applyUpdate = (updated) => setAppointments((current) => current.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
 
   useEffect(() => {
     let active = true;
@@ -22,7 +25,7 @@ export default function AppointmentsPage() {
     setLoading(true);
     setError('');
     const query = {
-      ...(filters.date ? { from: filters.date, to: filters.date } : {}),
+      ...(filters.date ? { agendaDate: filters.date } : {}),
       ...(filters.barberId ? { barberId: filters.barberId } : {}),
       ...(filters.status ? { status: filters.status } : {}),
     };
@@ -34,6 +37,7 @@ export default function AppointmentsPage() {
 
   async function changeStatus(appointment, status) {
     if (status === appointment.status) return;
+    if (!window.confirm(`¿Cambiar el turno a ${statusLabels[status]}?`)) return;
     setChangingId(appointment.id);
     setError('');
     try {
@@ -44,6 +48,16 @@ export default function AppointmentsPage() {
     } finally { setChangingId(null); }
   }
 
+  function statusControl(appointment) {
+    if (!['pending', 'confirmed'].includes(appointment.status)) return null;
+    return <div className="appointment-owner-actions" aria-label={`Otras acciones del turno ${appointment.id}`}>
+      {appointmentStatuses.filter((status) => status === appointment.status || (appointment.status === 'pending' && status === 'confirmed')
+        || (appointment.paymentStatus !== 'paid' && ['cancelled', 'no_show'].includes(status))).filter((status) => status !== appointment.status)
+        .map((status) => <Button key={status} variant="outline-light" size="sm" disabled={changingId === appointment.id}
+          onClick={() => changeStatus(appointment, status)}>{status === 'cancelled' ? 'Cancelar turno' : status === 'no_show' ? 'Marcar ausente' : 'Confirmar turno'}</Button>)}
+    </div>;
+  }
+
   return <>
     <div className="admin-filters mb-3">
       <Form.Group><Form.Label>Fecha</Form.Label><Form.Control type="date" value={filters.date} onChange={(event) => setFilters((current) => ({ ...current, date: event.target.value }))} /></Form.Group>
@@ -52,19 +66,10 @@ export default function AppointmentsPage() {
       <div className="admin-filter-count">{loading ? 'Actualizando…' : `${appointments.length} turnos`}</div>
     </div>
     {error && <Alert variant="warning" dismissible onClose={() => setError('')}>{error}</Alert>}
-    <div className="admin-card table-responsive">
-      {loading ? <div className="admin-loading"><Spinner animation="border" role="status" /><span>Cargando turnos…</span></div> : appointments.length ? <Table className="admin-table align-middle mb-0">
-        <thead><tr><th>Cliente</th><th>Servicio</th><th>Barbero</th><th>Fecha y hora</th><th>Precio</th><th>Pago</th><th>Estado</th></tr></thead>
-        <tbody>{appointments.map((appointment) => <tr key={appointment.id}>
-          <td><strong>{appointment.customer?.name || '—'}</strong><small>{appointment.customer?.phone || 'Sin teléfono'}</small><small>{appointment.customer?.email || ''}</small></td>
-          <td><strong>{appointment.serviceName || appointment.service?.name || '—'}</strong></td>
-          <td>{appointment.barber?.name || '—'}</td>
-          <td>{formatAppointmentDate(appointment.startAt)}</td>
-          <td>{formatPrice(appointment.servicePrice)}</td>
-          <td><strong>{paymentMethodLabels[appointment.paymentMethod] || 'No especificado'}</strong><small>{paymentStatusLabels[appointment.paymentStatus] || 'Pendiente'}</small></td>
-          <td><div className="d-flex flex-column gap-2"><Badge bg={statusVariants[appointment.status] || 'secondary'} className="align-self-start">{statusLabels[appointment.status] || appointment.status}</Badge><Form.Select aria-label={`Cambiar estado del turno ${appointment.id}`} size="sm" value={appointment.status} disabled={changingId === appointment.id} onChange={(event) => changeStatus(appointment, event.target.value)}>{appointmentStatuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</Form.Select></div></td>
-        </tr>)}</tbody>
-      </Table> : <p className="admin-empty mb-0">No hay turnos que coincidan con estos filtros.</p>}
+    <div>
+      {loading ? <div className="admin-loading"><Spinner animation="border" role="status" /><span>Cargando turnos…</span></div> : appointments.length ? <>
+        <div className="appointments-grid">{appointments.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} onUpdated={applyUpdate} statusControl={statusControl(appointment)} showDate />)}</div>
+      </> : <p className="admin-empty mb-0">No hay turnos que coincidan con estos filtros.</p>}
     </div>
   </>;
 }

@@ -3,7 +3,7 @@ export const appointmentStatuses = ['pending', 'confirmed', 'completed', 'cancel
 export const statusLabels = {
   pending: 'Pendiente',
   confirmed: 'Confirmado',
-  completed: 'Completado',
+  completed: 'Realizado',
   cancelled: 'Cancelado',
   no_show: 'No asistió',
 };
@@ -18,6 +18,7 @@ export const statusVariants = {
 
 export const paymentMethodLabels = {
   cash: 'Efectivo',
+  transfer: 'Transferencia',
   mercado_pago: 'Mercado Pago',
 };
 
@@ -39,9 +40,10 @@ export function formatAppointmentDate(value) {
   if (!value) return '—';
   return new Date(value).toLocaleString('es-AR', {
     weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Argentina/Buenos_Aires',
   });
 }
 
 export function formatPrice(value) {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(value) || 0);
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(value) || 0);
 }

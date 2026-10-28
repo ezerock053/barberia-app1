@@ -57,6 +57,8 @@ function createWebhookServer(t, { order, appointmentExists = true, getOrder } = 
     id: 17,
     status: 'pending',
     paymentStatus: 'pending',
+    mercadoPagoOrderId: orderId,
+    servicePrice: '12000.00',
     updates: [],
     async update(values, options) {
       this.updates.push({ values, options });
@@ -66,6 +68,11 @@ function createWebhookServer(t, { order, appointmentExists = true, getOrder } = 
   } : null;
   const lookups = [];
   const requests = [];
+  const charges = [];
+  const ChargeModel = {
+    findOne: async () => charges[0] || null,
+    create: async (values) => { charges.push({ id: 1, ...values }); return charges[0]; },
+  };
   let lockTail = Promise.resolve();
   const AppointmentModel = {
     unscoped: () => ({
@@ -89,18 +96,19 @@ function createWebhookServer(t, { order, appointmentExists = true, getOrder } = 
   app.use(express.json());
   app.use('/api/webhooks', createMercadoPagoWebhookRouter({
     AppointmentModel,
+    ChargeModel,
     sequelizeInstance,
     getWebhookSecret: () => webhookSecret,
     getAccessToken: () => accessToken,
     getOrder: async (options) => {
       requests.push(options);
-      if (getOrder) return getOrder(options);
-      return order || {
+      const result = getOrder ? await getOrder(options) : order || {
         id: orderId,
         external_reference: 'barberia-appointment-17',
         status: 'created',
         status_detail: 'created',
       };
+      return { total_paid_amount: '12000.00', currency: 'ARS', last_updated_date: '2026-10-28T14:00:00Z', ...result };
     },
   }));
 
@@ -111,6 +119,7 @@ function createWebhookServer(t, { order, appointmentExists = true, getOrder } = 
     appointment,
     lookups,
     requests,
+    charges,
   })));
 }
 
@@ -139,7 +148,7 @@ test('una notificación firmada consulta la Order y mantiene pendiente el pago a
   assert.equal(response.status, 200);
   assert.deepEqual(context.requests, [{ accessToken, orderId }]);
   assert.equal(context.lookups.length, 1);
-  assert.deepEqual(context.lookups[0].where, { mercadoPagoOrderId: orderId, paymentMethod: 'mercado_pago' });
+  assert.deepEqual(context.lookups[0].where, { mercadoPagoOrderId: orderId });
   assert.equal(context.lookups[0].lock, 'UPDATE');
   assert.equal(context.appointment.updates.length, 0);
   assert.equal(context.appointment.status, 'pending');
@@ -234,6 +243,46 @@ test('duplicados acreditados actualizan una sola vez y no crean reservas', async
   assert.equal(context.appointment.updates.length, 1);
   assert.equal(context.appointment.paymentStatus, 'paid');
   assert.equal(context.appointment.status, 'pending');
+  assert.equal(context.charges.length, 1);
+  assert.equal(context.charges[0].amount, '12000.00');
+  assert.equal(context.charges[0].recordedByUserId, null);
+  assert.equal(context.charges[0].dateSource, 'provider_update');
+});
+
+test('webhook no acredita importes insuficientes, moneda distinta o sin importe de API', async (t) => {
+  for (const values of [{ total_paid_amount: '1.00' }, { currency: 'USD' }, { total_paid_amount: null }]) {
+    const context = await createWebhookServer(t, { order: { id: orderId, external_reference: 'barberia-appointment-17',
+      status: 'processed', status_detail: 'accredited', ...values } });
+    assert.equal((await sendOrderNotification(context.base)).status, 502);
+    assert.equal(context.charges.length, 0);
+    assert.equal(context.appointment.paymentStatus, 'pending');
+  }
+});
+
+test('webhook valida referencia externa antes de registrar un cobro', async (t) => {
+  const context = await createWebhookServer(t, { order: { id: orderId, external_reference: 'barberia-appointment-99', status: 'processed', status_detail: 'accredited' } });
+  assert.equal((await sendOrderNotification(context.base)).status, 200);
+  assert.equal(context.charges.length, 0);
+  assert.equal(context.appointment.updates.length, 0);
+});
+
+test('notificación pendiente tardía no revierte un cobro acreditado', async (t) => {
+  let calls = 0;
+  const context = await createWebhookServer(t, { getOrder: async () => ({ id: orderId, external_reference: 'barberia-appointment-17',
+    status: ++calls === 1 ? 'processed' : 'created', status_detail: calls === 1 ? 'accredited' : 'created' }) });
+  assert.equal((await sendOrderNotification(context.base)).status, 200);
+  assert.equal((await sendOrderNotification(context.base)).status, 200);
+  assert.equal(context.charges.length, 1); assert.equal(context.appointment.updates.length, 1);
+  assert.equal(context.appointment.paymentStatus, 'paid');
+});
+
+test('un cobro presencial existente no se sobrescribe por una aprobación contradictoria', async (t) => {
+  const context = await createWebhookServer(t, { order: { id: orderId, external_reference: 'barberia-appointment-17', status: 'processed', status_detail: 'accredited' } });
+  context.charges.push({ id: 1, appointmentId: 17, method: 'cash', amount: '12000.00' });
+  context.appointment.paymentStatus = 'paid';
+  assert.equal((await sendOrderNotification(context.base)).status, 502);
+  assert.equal(context.charges.length, 1); assert.equal(context.charges[0].method, 'cash');
+  assert.equal(context.appointment.updates.length, 0);
 });
 
 test('un error de API libera el bloqueo para la siguiente notificacion', async (t) => {

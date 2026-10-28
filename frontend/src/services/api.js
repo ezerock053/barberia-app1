@@ -70,6 +70,11 @@ export const getAppointments = (filters = {}) => {
   return request(`/appointments${query ? `?${query}` : ''}`, {}, { admin: true });
 };
 export const updateAppointment = (id, updates) => put(`/appointments/${id}`, updates, { admin: true });
+export const getAppointment = (id) => request(`/appointments/${encodeURIComponent(id)}`, {}, { admin: true });
+export const completeAppointment = (id) => post(`/appointments/${encodeURIComponent(id)}/complete`, {}, { admin: true });
+export const completeAndCollectAppointment = (id, method, amount) => post(`/appointments/${encodeURIComponent(id)}/complete-and-charge`, { method, amount }, { admin: true });
+export const refreshAppointmentPayment = (id) => post(`/appointments/${encodeURIComponent(id)}/refresh-payment`, {}, { admin: true });
+export const collectAppointment = (id, charge) => post(`/appointments/${encodeURIComponent(id)}/charges`, charge, { admin: true });
 export const createService = (service) => post('/services', service, { admin: true });
 export const updateService = (id, updates) => put(`/services/${id}`, updates, { admin: true });
 export const createBarber = (barber) => post('/barbers', barber, { admin: true });

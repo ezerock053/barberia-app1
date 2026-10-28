@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Form, Spinner, Table } from 'react-bootstrap';
+import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 import { getAppointments } from '../services/api.js';
-import { formatPrice, statusLabels, statusVariants } from './adminUtils.js';
-import { agendaDateString, formatAgendaDate } from './agendaTime.js';
+import { agendaDateString } from './agendaTime.js';
+import { AppointmentCard } from './AppointmentActions.jsx';
 
 export default function MyAgendaPage() {
   const [date, setDate] = useState(agendaDateString);
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const applyUpdate = (updated) => setAppointments((current) => current.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
 
   useEffect(() => {
     let active = true;
@@ -22,19 +23,12 @@ export default function MyAgendaPage() {
   }, [date]);
 
   return <>
-    <Form.Group className="mb-3" controlId="agenda-date"><Form.Label>Fecha de tu agenda</Form.Label>
+    <div className="agenda-toolbar"><Form.Group controlId="agenda-date"><Form.Label>Fecha de tu agenda</Form.Label>
       <Form.Control type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-      <Form.Text>Horario de Buenos Aires. Esta agenda es de solo lectura.</Form.Text>
-    </Form.Group>
+    </Form.Group><Button variant="outline-light" onClick={() => setDate(agendaDateString())}>Hoy</Button>
+      <span>{loading ? 'Cargando…' : `${appointments.length} turnos`} · Buenos Aires</span></div>
     {error ? <Alert variant="warning">{error}</Alert> : loading ? <Spinner animation="border" role="status"><span className="visually-hidden">Cargando agenda</span></Spinner>
-      : appointments.length ? <div className="admin-card table-responsive"><Table className="admin-table align-middle mb-0">
-        <thead><tr><th>Fecha y hora</th><th>Cliente</th><th>Servicio</th><th>Precio</th><th>Estado</th></tr></thead>
-        <tbody>{appointments.map((appointment) => <tr key={appointment.id}>
-          <td>{formatAgendaDate(appointment.startAt)}</td>
-          <td><strong>{appointment.customer?.name || '—'}</strong><small>{appointment.customer?.phone || ''}</small></td>
-          <td>{appointment.serviceName}</td><td>{formatPrice(appointment.servicePrice)}</td>
-          <td><Badge bg={statusVariants[appointment.status] || 'secondary'}>{statusLabels[appointment.status] || appointment.status}</Badge></td>
-        </tr>)}</tbody>
-      </Table></div> : <p className="admin-empty">No tenés turnos para esta fecha.</p>}
+      : appointments.length ? <div className="appointments-grid">{appointments.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} onUpdated={applyUpdate} />)}</div>
+        : <p className="admin-empty">No tenés turnos para esta fecha.</p>}
   </>;
 }

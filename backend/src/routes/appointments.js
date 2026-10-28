@@ -3,7 +3,8 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const { Op } = require('sequelize');
-const { Appointment, Barber, Customer, Service, WorkingSchedule, sequelize } = require('../models');
+const { Appointment, Barber, Customer, Service, WorkingSchedule, Charge, AdminUser, sequelize } = require('../models');
+const { protectedEditError, completionFields, publicAppointment } = require('../utils/settlement');
 const { getReservationWindowError } = require('../utils/reservationWindow');
 const requireAdmin = require('../middleware/requireAdmin');
 const requireUser = require('../middleware/requireUser');
@@ -16,6 +17,8 @@ const associations = [
   { model: Customer, as: 'customer' },
   { model: Barber, as: 'barber' },
   { model: Service, as: 'service' },
+  { model: Charge, as: 'charge', include: [{ model: AdminUser, as: 'recordedBy', attributes: ['id', 'email'] }] },
+  { model: AdminUser, as: 'completedBy', attributes: ['id', 'email'] },
 ];
 
 function parseId(value) {
@@ -217,11 +220,12 @@ router.get('/', requireUser, async (req, res) => {
   }
   try {
     const appointments = await Appointment.findAll({
+      attributes: { include: ['mercadoPagoOrderId', 'mercadoPagoIdempotencyKey'] },
       where: parsed.where,
       include: associations,
       order: [['startAt', 'ASC']],
     });
-    return res.status(200).json(appointments);
+    return res.status(200).json(appointments.map(publicAppointment));
   } catch {
     return res.status(500).json({ error: 'Internal server error' });
   }
@@ -232,10 +236,10 @@ router.get('/:id', requireUser, async (req, res) => {
   if (id === null) return res.status(400).json({ error: 'Invalid appointment ID' });
   try {
     const appointment = req.adminUser.role === 'barber'
-      ? await Appointment.findOne({ where: { id, barberId: req.adminUser.barberId }, include: associations })
-      : await Appointment.findByPk(id, { include: associations });
+      ? await Appointment.findOne({ where: { id, barberId: req.adminUser.barberId }, attributes: { include: ['mercadoPagoOrderId', 'mercadoPagoIdempotencyKey'] }, include: associations })
+      : await Appointment.findByPk(id, { attributes: { include: ['mercadoPagoOrderId', 'mercadoPagoIdempotencyKey'] }, include: associations });
     if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
-    return res.status(200).json(appointment);
+    return res.status(200).json(publicAppointment(appointment));
   } catch {
     return res.status(500).json({ error: 'Internal server error' });
   }
@@ -371,11 +375,11 @@ router.post('/:id/payment', async (req, res) => {
       if (!appointment || !paymentTokenMatches(token, appointment.paymentInitiationTokenHash)) {
         return { status: 404, body: { error: 'Appointment not found or payment cannot be started' } };
       }
-      if (appointment.mercadoPagoOrderId && appointment.mercadoPagoCheckoutUrl) {
-        return { checkoutUrl: appointment.mercadoPagoCheckoutUrl };
-      }
       if (!canStartMercadoPagoPayment(appointment)) {
         return { status: 409, body: { error: 'Payment cannot be started for this appointment' } };
+      }
+      if (appointment.mercadoPagoOrderId && appointment.mercadoPagoCheckoutUrl) {
+        return { checkoutUrl: appointment.mercadoPagoCheckoutUrl };
       }
       if (!appointment.mercadoPagoIdempotencyKey || appointment.mercadoPagoIdempotencyKey !== paymentRequest.idempotencyKey) {
         throw new Error('Inconsistent Mercado Pago idempotency state');
@@ -412,10 +416,14 @@ router.put('/:id', requireAdmin, async (req, res) => {
   if (validationError) return res.status(400).json({ error: validationError });
   try {
     const result = await sequelize.transaction(async (transaction) => {
-      const appointment = await Appointment.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+      const appointment = await Appointment.findByPk(id, { attributes: { include: ['mercadoPagoOrderId', 'mercadoPagoIdempotencyKey'] }, transaction, lock: transaction.LOCK.UPDATE });
       if (!appointment) return { status: 404, body: { error: 'Appointment not found' } };
 
+      const editError = protectedEditError(appointment, req.body);
+      if (editError) return { status: 409, body: { error: editError } };
+
       const updates = {};
+      if (req.body.status === 'completed') Object.assign(updates, completionFields(appointment, req.adminUser.id));
       for (const field of ['customerId', 'barberId', 'serviceId', 'notes', 'status']) {
         if (Object.hasOwn(req.body, field)) updates[field] = req.body[field];
       }
@@ -476,7 +484,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
       }
       await appointment.update(updates, { transaction });
       await appointment.reload({ include: associations, transaction });
-      return { status: 200, body: appointment };
+      return { status: 200, body: publicAppointment(appointment) };
     });
     return res.status(result.status).json(result.body);
   } catch {
@@ -491,6 +499,8 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     const result = await sequelize.transaction(async (transaction) => {
       const appointment = await Appointment.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
       if (!appointment) return { status: 404, body: { error: 'Appointment not found' } };
+      const error = protectedEditError(appointment, { status: 'cancelled' });
+      if (error) return { status: 409, body: { error } };
       const barbers = await lockBarbers([appointment.barberId], transaction);
       if (!barbers) return { status: 404, body: { error: 'Barber not found' } };
       await appointment.update({ status: 'cancelled' }, { transaction });

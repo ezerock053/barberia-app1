@@ -63,7 +63,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
         validate: {
-          isIn: [['cash', 'mercado_pago']],
+          isIn: [['cash', 'transfer', 'mercado_pago']],
         },
       },
       paymentStatus: {
@@ -97,6 +97,8 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
+      completedAt: { type: DataTypes.DATE, allowNull: true },
+      completedByUserId: { type: DataTypes.INTEGER, allowNull: true },
       servicePrice: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,

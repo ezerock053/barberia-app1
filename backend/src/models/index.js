@@ -8,12 +8,14 @@ const WorkingSchedule = require('./workingSchedule');
 const Customer = require('./customer');
 const Appointment = require('./appointment');
 const AdminUser = require('./adminUser');
+const Charge = require('./charge');
 
 const sequelize = new Sequelize(config.database, config.username, config.password, {
   host: config.host,
   port: config.port,
   dialect: config.dialect,
   logging: false,
+  timezone: '+00:00',
 });
 
 const models = {
@@ -23,6 +25,7 @@ const models = {
   Customer: Customer(sequelize, DataTypes),
   Appointment: Appointment(sequelize, DataTypes),
   AdminUser: AdminUser(sequelize, DataTypes),
+  Charge: Charge(sequelize, DataTypes),
 };
 
 models.Barber.hasMany(models.WorkingSchedule, {
@@ -30,6 +33,10 @@ models.Barber.hasMany(models.WorkingSchedule, {
   as: 'workingSchedules',
 });
 models.AdminUser.belongsTo(models.Barber, { foreignKey: 'barberId', as: 'barber' });
+models.Appointment.hasOne(models.Charge, { foreignKey: 'appointmentId', as: 'charge', onUpdate: 'RESTRICT', onDelete: 'RESTRICT' });
+models.Charge.belongsTo(models.Appointment, { foreignKey: 'appointmentId', as: 'appointment', onUpdate: 'RESTRICT', onDelete: 'RESTRICT' });
+models.Charge.belongsTo(models.AdminUser, { foreignKey: 'recordedByUserId', as: 'recordedBy', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
+models.Appointment.belongsTo(models.AdminUser, { foreignKey: 'completedByUserId', as: 'completedBy', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
 models.Barber.hasOne(models.AdminUser, { foreignKey: 'barberId', as: 'user' });
 models.WorkingSchedule.belongsTo(models.Barber, {
   foreignKey: 'barberId',

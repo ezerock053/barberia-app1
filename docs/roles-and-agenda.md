@@ -1,5 +1,9 @@
 # Usuarios, roles y agenda
 
+Este documento describe el Bloque 1. Las acciones de finalización y cobro que
+amplían su agenda de solo lectura se documentan en
+[Bloque 2](service-completion-and-charges.md).
+
 ## Instalación
 
 Ejecutar las migraciones antes de iniciar la versión nueva:

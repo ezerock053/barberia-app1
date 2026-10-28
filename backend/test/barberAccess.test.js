@@ -35,7 +35,7 @@ test('barbero solo lista su barberId aunque el cliente manipule filtros', async 
   for (const suffix of ['', '?barberId=2', '?role=owner&userId=1']) {
     const response = await fetch(`${base}/api/appointments${suffix}`);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), [{ id: 10, barberId: 2 }]);
+    assert.deepEqual(await response.json(), [{ id: 10, barberId: 2, checkoutStarted: false }]);
   }
   assert.equal((await fetch(`${base}/api/appointments?barberId=3`)).status, 403);
   assert.equal((await fetch(`${base}/api/appointments?barberId=2&barberId=3`)).status, 400);

@@ -2,7 +2,8 @@
 
 const crypto = require('node:crypto');
 const express = require('express');
-const { Appointment, sequelize } = require('../models');
+const { Appointment, Charge, sequelize } = require('../models');
+const { recordProviderCharge } = require('../utils/settlement');
 const { getCheckoutOrder, MercadoPagoError } = require('../utils/mercadoPago');
 
 function parseSignature(signature) {
@@ -52,6 +53,7 @@ function mapOrderStatusToPaymentStatus(order) {
 
 function createMercadoPagoWebhookRouter({
   AppointmentModel = Appointment,
+  ChargeModel = Charge,
   sequelizeInstance = sequelize,
   getOrder = getCheckoutOrder,
   getAccessToken = () => process.env.MERCADOPAGO_ACCESS_TOKEN,
@@ -82,7 +84,7 @@ function createMercadoPagoWebhookRouter({
     try {
       await sequelizeInstance.transaction(async (transaction) => {
         const appointment = await AppointmentModel.unscoped().findOne({
-          where: { mercadoPagoOrderId: notificationOrderId, paymentMethod: 'mercado_pago' },
+          where: { mercadoPagoOrderId: notificationOrderId },
           transaction,
           lock: transaction.LOCK.UPDATE,
         });
@@ -96,7 +98,11 @@ function createMercadoPagoWebhookRouter({
           || order.external_reference !== `barberia-appointment-${appointment.id}`) return false;
 
         const paymentStatus = mapOrderStatusToPaymentStatus(order);
-        if (!paymentStatus || appointment.paymentStatus === paymentStatus) return false;
+        if (!paymentStatus) return false;
+        if (paymentStatus === 'paid') await recordProviderCharge(appointment, order, ChargeModel, transaction);
+        // A collected payment cannot become unpaid due to a delayed notification.
+        // Refunds need a separate, explicit accounting operation.
+        if (appointment.paymentStatus === 'paid' || appointment.paymentStatus === paymentStatus) return false;
 
         await appointment.update({ paymentStatus }, { transaction });
         return true;

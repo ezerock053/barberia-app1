@@ -28,6 +28,7 @@ app.use('/api/services', servicesRouter);
 app.use('/api/users', require('./routes/users'));
 app.use('/api/customers', customersRouter);
 app.use('/api/appointments', appointmentsRouter);
+app.use('/api/appointments', require('./routes/appointmentActions').createAppointmentActionsRouter());
 app.use('/api/webhooks', createMercadoPagoWebhookRouter());
 app.use('/api/availability', availabilityRouter);
 app.use('/api/barbers/:barberId/schedules', schedulesRouter);
