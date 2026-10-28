@@ -6,11 +6,11 @@ const express = require('express');
 const createAuthRouter = require('../src/routes/auth');
 const { createRequireAdmin } = require('../src/middleware/requireAdmin');
 
-function createHarness({ admin = { id: 7, email: 'admin@example.com', passwordHash: 'bcrypt-hash', active: true }, loggedIn = false } = {}) {
+function createHarness({ admin = { id: 7, email: 'admin@example.com', passwordHash: 'bcrypt-hash', active: true, role: 'owner', barberId: null }, loggedIn = false, barberActive = true } = {}) {
   const state = { adminUserId: loggedIn ? admin.id : undefined, regenerated: false, destroyed: false, invalidatedSessions: false };
   const model = {
-    unscoped: () => ({ findOne: async ({ where }) => where.active && (where.email === admin.email || where.id === admin.id) ? admin : null }),
-    findOne: async ({ where }) => where.active && where.id === admin.id ? { id: admin.id, email: admin.email } : null,
+    unscoped: () => ({ findOne: async ({ where }) => admin.active && where.active && (where.email === admin.email || where.id === admin.id) ? admin : null }),
+    findOne: async ({ where }) => admin.active && where.active && where.id === admin.id ? admin : null,
   };
   const hasher = {
     compare: async (candidate, hash) => (candidate === 'correct-password' && hash === 'bcrypt-hash') || hash === `bcrypt-hash:${candidate}`,
@@ -32,6 +32,7 @@ function createHarness({ admin = { id: 7, email: 'admin@example.com', passwordHa
   });
   app.use('/api/auth', createAuthRouter({
     adminUserModel: model,
+    barberModel: { findOne: async () => barberActive ? { id: admin.barberId } : null },
     passwordHasher: hasher,
     requireAdmin: createRequireAdmin(model),
     invalidateSessions: async (transaction) => {
@@ -58,14 +59,14 @@ test('login exitoso regenera la sesión y /me devuelve solo datos públicos; log
       body: JSON.stringify({ email: 'ADMIN@example.com', password: 'correct-password' }),
     });
     assert.equal(login.status, 200);
-    assert.deepEqual(await login.json(), { admin: { id: 7, email: 'admin@example.com' } });
+    assert.deepEqual(await login.json(), { admin: { id: 7, email: 'admin@example.com', role: 'owner', barberId: null } });
     assert.equal(state.regenerated, true);
     assert.equal(state.adminUserId, 7);
 
     const me = await fetch(`${baseUrl}/me`);
     assert.equal(me.status, 200);
     const meBody = await me.json();
-    assert.deepEqual(meBody, { admin: { id: 7, email: 'admin@example.com' } });
+    assert.deepEqual(meBody, { admin: { id: 7, email: 'admin@example.com', role: 'owner', barberId: null } });
     assert.equal(JSON.stringify(meBody).includes('passwordHash'), false);
 
     const logout = await fetch(`${baseUrl}/logout`, { method: 'POST' });
@@ -90,6 +91,43 @@ test('credenciales incorrectas reciben la misma respuesta genérica', async (t) 
     assert.equal(unknownEmail.status, 401);
     assert.deepEqual(await wrongPassword.json(), await unknownEmail.json());
   });
+});
+
+test('barbero inicia sesión y /me expone su rol y vínculo sin contraseña', async (t) => {
+  const admin = { id: 8, email: 'barber@example.com', passwordHash: 'bcrypt-hash', active: true, role: 'barber', barberId: 2 };
+  const { app, state } = createHarness({ admin });
+  await withServer(t, app, async (base) => {
+    const login = await fetch(`${base}/login`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: admin.email, password: 'correct-password', role: 'owner', barberId: 99 }) });
+    assert.equal(login.status, 200);
+    const expected = { admin: { id: 8, email: admin.email, role: 'barber', barberId: 2 } };
+    assert.deepEqual(await login.json(), expected);
+    assert.equal(state.regenerated, true);
+    assert.deepEqual(await (await fetch(`${base}/me`)).json(), expected);
+    admin.active = false;
+    assert.equal((await fetch(`${base}/me`)).status, 401);
+    assert.equal(state.destroyed, true);
+  });
+});
+
+test('login y sesión rechazan barberos sin vínculo activo y roles inválidos', async (t) => {
+  for (const configuration of [
+    { role: 'barber', barberId: null, barberActive: true },
+    { role: 'barber', barberId: 2, barberActive: false },
+    { role: 'unexpected', barberId: null, barberActive: true },
+    { role: 'owner', barberId: 2, barberActive: true },
+  ]) {
+    const admin = { id: 8, email: 'barber@example.com', passwordHash: 'bcrypt-hash', active: true,
+      role: configuration.role, barberId: configuration.barberId };
+    const { app, state } = createHarness({ admin, loggedIn: true, barberActive: configuration.barberActive });
+    await withServer(t, app, async (base) => {
+      const login = await fetch(`${base}/login`, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: admin.email, password: 'correct-password' }) });
+      assert.equal(login.status, 401);
+      assert.equal(state.regenerated, false);
+      assert.equal((await fetch(`${base}/me`)).status, 401);
+    });
+  }
 });
 
 test('/me responde 401 sin autenticaciÃ³n', async (t) => {

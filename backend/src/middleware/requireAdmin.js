@@ -1,23 +1,15 @@
 'use strict';
 
-const { AdminUser } = require('../models');
+const { AdminUser, Barber } = require('../models');
+const { createRequireUser } = require('./requireUser');
 
-function createRequireAdmin(adminUserModel = AdminUser) {
-  return async function requireAdmin(req, res, next) {
-    const adminUserId = req.session?.adminUserId;
-    if (!adminUserId) return res.status(401).json({ error: 'No autenticado' });
-
-    try {
-      const admin = await adminUserModel.findOne({
-        attributes: ['id', 'email', 'active'],
-        where: { id: adminUserId, active: true },
-      });
-      if (!admin) return res.status(401).json({ error: 'No autenticado' });
-      req.adminUser = admin;
+function createRequireAdmin(adminUserModel = AdminUser, barberModel = Barber) {
+  const authenticate = createRequireUser(adminUserModel, barberModel);
+  return function requireAdmin(req, res, next) {
+    return authenticate(req, res, () => {
+      if (req.adminUser.role !== 'owner') return res.status(403).json({ error: 'Acceso exclusivo del dueño' });
       return next();
-    } catch {
-      return res.status(500).json({ error: 'Internal server error' });
-    }
+    });
   };
 }
 

@@ -6,6 +6,7 @@ const { Op } = require('sequelize');
 const { Appointment, Barber, Customer, Service, WorkingSchedule, sequelize } = require('../models');
 const { getReservationWindowError } = require('../utils/reservationWindow');
 const requireAdmin = require('../middleware/requireAdmin');
+const requireUser = require('../middleware/requireUser');
 const { createCheckoutOrder, MercadoPagoError } = require('../utils/mercadoPago');
 
 const router = express.Router();
@@ -195,9 +196,25 @@ function buildWhere(query) {
   return { where };
 }
 
-router.get('/', requireAdmin, async (req, res) => {
+router.get('/', requireUser, async (req, res) => {
   const parsed = buildWhere(req.query);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
+  if (req.adminUser.role === 'barber') {
+    if (parsed.where.barberId !== undefined && parsed.where.barberId !== req.adminUser.barberId) {
+      return res.status(403).json({ error: 'Solo podés consultar tu agenda' });
+    }
+    parsed.where.barberId = req.adminUser.barberId;
+  }
+  if (req.query.agendaDate !== undefined) {
+    if (typeof req.query.agendaDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(req.query.agendaDate)
+      || !isValidDateFilter(req.query.agendaDate) || req.query.from !== undefined || req.query.to !== undefined) {
+      return res.status(400).json({ error: 'agendaDate must be YYYY-MM-DD and cannot be combined with from/to' });
+    }
+    // America/Argentina/Buenos_Aires uses UTC-03:00 for this application's dates.
+    // Filter stored instants; never rewrite historical appointments.
+    const start = new Date(`${req.query.agendaDate}T00:00:00-03:00`);
+    parsed.where.startAt = { [Op.gte]: start, [Op.lt]: new Date(start.getTime() + 86400000) };
+  }
   try {
     const appointments = await Appointment.findAll({
       where: parsed.where,
@@ -210,11 +227,13 @@ router.get('/', requireAdmin, async (req, res) => {
   }
 });
 
-router.get('/:id', requireAdmin, async (req, res) => {
+router.get('/:id', requireUser, async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid appointment ID' });
   try {
-    const appointment = await Appointment.findByPk(id, { include: associations });
+    const appointment = req.adminUser.role === 'barber'
+      ? await Appointment.findOne({ where: { id, barberId: req.adminUser.barberId }, include: associations })
+      : await Appointment.findByPk(id, { include: associations });
     if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
     return res.status(200).json(appointment);
   } catch {

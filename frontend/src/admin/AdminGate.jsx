@@ -7,6 +7,7 @@ import { getAdminSession, logoutAdmin, setAdminUnauthorizedHandler } from '../se
 
 function AdminSessionCheck() {
   const [status, setStatus] = useState('checking');
+  const [user, setUser] = useState(null);
   const [error, setError] = useState('');
   const [logoutError, setLogoutError] = useState('');
   const redirecting = useRef(false);
@@ -21,7 +22,16 @@ function AdminSessionCheck() {
 
     setAdminUnauthorizedHandler(redirectToLogin);
     getAdminSession()
-      .then(() => { if (mounted) setStatus('authenticated'); })
+      .then(({ admin }) => {
+        if (!mounted) return;
+        if (!['owner', 'barber'].includes(admin?.role)) throw new Error('Rol inválido');
+        if (admin.role === 'barber' && window.location.pathname !== '/admin/agenda') {
+          window.location.replace('/admin/agenda');
+          return;
+        }
+        setUser(admin);
+        setStatus('authenticated');
+      })
       .catch((requestError) => {
         if (!mounted) return;
         if (requestError.status === 401) return redirectToLogin();
@@ -57,7 +67,7 @@ function AdminSessionCheck() {
   if (status === 'error') {
     return <main className="admin-auth-shell"><Container className="admin-auth-error"><Alert variant="warning">{error}</Alert><Button variant="outline-warning" onClick={() => window.location.reload()}>Intentar nuevamente</Button></Container></main>;
   }
-  return <AdminLayout onLogout={handleLogout} logoutError={logoutError} />;
+  return <AdminLayout user={user} onLogout={handleLogout} logoutError={logoutError} />;
 }
 
 export default function AdminGate() {

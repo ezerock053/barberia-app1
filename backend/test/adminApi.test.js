@@ -48,7 +48,7 @@ async function withServer(t, options, run) {
 function mockAdmin(t, active = true) {
   return t.mock.method(AdminUser, 'findOne', async (options) => {
     assert.deepEqual(options.where, { id: 1, active: true });
-    return active ? { id: 1, email: 'admin@example.com', active: true } : null;
+    return active ? { id: 1, email: 'admin@example.com', active: true, role: 'owner', barberId: null } : null;
   });
 }
 

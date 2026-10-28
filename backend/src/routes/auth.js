@@ -2,13 +2,15 @@
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { AdminUser, sequelize } = require('../models');
+const { AdminUser, Barber, sequelize } = require('../models');
+const { hasValidAccess, publicUser } = require('../middleware/requireUser');
 const requireAdminMiddleware = require('../middleware/requireAdmin');
 
 const INVALID_CREDENTIALS = { error: 'Email o contraseña incorrectos' };
 
 function createAuthRouter({
   adminUserModel = AdminUser,
+  barberModel = Barber,
   passwordHasher = bcrypt,
   requireAdmin = requireAdminMiddleware,
   invalidateSessions = async () => {},
@@ -26,7 +28,8 @@ function createAuthRouter({
       const admin = await adminUserModel.unscoped().findOne({
         where: { email: email.trim().toLowerCase(), active: true },
       });
-      if (!admin || !await passwordHasher.compare(password, admin.passwordHash)) {
+      if (!admin || !await passwordHasher.compare(password, admin.passwordHash)
+        || !await hasValidAccess(admin, barberModel)) {
         return res.status(401).json(INVALID_CREDENTIALS);
       }
 
@@ -35,7 +38,7 @@ function createAuthRouter({
         req.session.adminUserId = admin.id;
         req.session.save((saveError) => {
           if (saveError) return res.status(500).json({ error: 'No se pudo iniciar la sesión' });
-          return res.status(200).json({ admin: { id: admin.id, email: admin.email } });
+          return res.status(200).json({ admin: publicUser(admin) });
         });
       });
     } catch {
@@ -102,13 +105,13 @@ function createAuthRouter({
     if (!req.session.adminUserId) return res.status(401).json({ error: 'No autenticado' });
     try {
       const admin = await adminUserModel.findOne({
-        attributes: ['id', 'email'],
+        attributes: ['id', 'email', 'active', 'role', 'barberId'],
         where: { id: req.session.adminUserId, active: true },
       });
-      if (!admin) {
+      if (!await hasValidAccess(admin, barberModel)) {
         return req.session.destroy(() => res.status(401).json({ error: 'No autenticado' }));
       }
-      return res.status(200).json({ admin: { id: admin.id, email: admin.email } });
+      return res.status(200).json({ admin: publicUser(admin) });
     } catch {
       return res.status(500).json({ error: 'Internal server error' });
     }

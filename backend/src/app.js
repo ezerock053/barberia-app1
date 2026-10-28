@@ -25,6 +25,7 @@ app.use('/api/auth', createAuthRouter({
   sequelizeInstance: sequelize,
 }));
 app.use('/api/services', servicesRouter);
+app.use('/api/users', require('./routes/users'));
 app.use('/api/customers', customersRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/webhooks', createMercadoPagoWebhookRouter());

@@ -5,12 +5,15 @@ import ServicesPage from './ServicesPage.jsx';
 import BarbersPage from './BarbersPage.jsx';
 import SchedulesPage from './SchedulesPage.jsx';
 import ChangePasswordPage from './ChangePasswordPage.jsx';
+import MyAgendaPage from './MyAgendaPage.jsx';
+import UsersPage from './UsersPage.jsx';
 
 const sections = [
   { path: '/admin', label: 'Resumen' },
   { path: '/admin/appointments', label: 'Turnos' },
   { path: '/admin/services', label: 'Servicios' },
   { path: '/admin/barbers', label: 'Barberos' },
+  { path: '/admin/users', label: 'Usuarios' },
   { path: '/admin/schedules', label: 'Horarios' },
   { path: '/admin/password', label: 'Cambiar contraseña' },
 ];
@@ -20,13 +23,16 @@ const pages = {
   '/admin/appointments': [AppointmentsPage, 'Turnos'],
   '/admin/services': [ServicesPage, 'Servicios'],
   '/admin/barbers': [BarbersPage, 'Barberos'],
+  '/admin/users': [UsersPage, 'Usuarios'],
   '/admin/schedules': [SchedulesPage, 'Horarios'],
   '/admin/password': [ChangePasswordPage, 'Cambiar contraseña'],
 };
 
-export default function AdminLayout({ onLogout, logoutError }) {
+export default function AdminLayout({ user, onLogout, logoutError }) {
   const pathname = window.location.pathname.replace(/\/$/, '') || '/admin';
-  const [Page, title] = pages[pathname] || pages['/admin'];
+  const isBarber = user?.role === 'barber';
+  const visibleSections = isBarber ? [{ path: '/admin/agenda', label: 'Mi agenda' }] : sections;
+  const [Page, title] = isBarber ? [MyAgendaPage, 'Mi agenda'] : pages[pathname] || pages['/admin'];
 
   return (
     <div className="admin-shell">
@@ -43,7 +49,7 @@ export default function AdminLayout({ onLogout, logoutError }) {
             <div className="admin-sidebar">
               <div className="admin-sidebar-title">PANEL</div>
               <Nav className="admin-nav flex-row flex-lg-column flex-nowrap overflow-auto" variant="pills">
-                {sections.map((section) => (
+                {visibleSections.map((section) => (
                   <Nav.Link key={section.path} href={section.path} active={pathname === section.path}>
                     {section.label}
                   </Nav.Link>

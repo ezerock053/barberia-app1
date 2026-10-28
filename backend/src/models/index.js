@@ -29,6 +29,8 @@ models.Barber.hasMany(models.WorkingSchedule, {
   foreignKey: 'barberId',
   as: 'workingSchedules',
 });
+models.AdminUser.belongsTo(models.Barber, { foreignKey: 'barberId', as: 'barber' });
+models.Barber.hasOne(models.AdminUser, { foreignKey: 'barberId', as: 'user' });
 models.WorkingSchedule.belongsTo(models.Barber, {
   foreignKey: 'barberId',
   as: 'barber',

@@ -49,6 +49,8 @@ export const loginAdmin = (credentials) => post('/auth/login', credentials);
 export const logoutAdmin = () => post('/auth/logout', {});
 export const changeAdminPassword = (passwords) => post('/auth/change-password', passwords, { admin: true });
 export const getAdminSession = () => request('/auth/me', {}, { admin: true });
+export const getUsers = () => request('/users', {}, { admin: true });
+export const createUser = (user) => post('/users', user, { admin: true });
 export const getAdminServices = () => request('/services?includeInactive=true', {}, { admin: true });
 export const getAdminBarbers = () => request('/barbers?includeInactive=true', {}, { admin: true });
 export const getAvailability = (barberId, date) =>

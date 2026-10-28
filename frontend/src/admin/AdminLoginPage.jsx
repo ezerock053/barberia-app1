@@ -16,8 +16,8 @@ export default function AdminLoginPage() {
     setError('');
     setSubmitting(true);
     try {
-      await loginAdmin({ email, password });
-      window.location.replace(returnTo);
+      const { admin } = await loginAdmin({ email, password });
+      window.location.replace(admin.role === 'barber' ? '/admin/agenda' : returnTo);
     } catch (requestError) {
       setError(requestError.status === 401
         ? 'El email o la contraseña no son correctos.'
@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
             <a href="/#inicio" className="admin-brand admin-auth-brand"><span className="brand-mark">B.</span> Administración</a>
             <div className="eyebrow mt-4">ACCESO ADMINISTRATIVO</div>
             <h1>Ingresar</h1>
-            <p className="admin-auth-copy">Usá las credenciales de administrador para continuar.</p>
+            <p className="admin-auth-copy">Usá tus credenciales de acceso para continuar.</p>
             {passwordChanged && <Alert variant="success" role="status">La contraseña se cambió. Ingresá con tu nueva contraseña.</Alert>}
             {error && <Alert variant="danger" role="alert">{error}</Alert>}
             <Form onSubmit={submit}>
