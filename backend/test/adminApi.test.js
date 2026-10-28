@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const express = require('express');
 process.env.SESSION_SECRET ||= 'test-secret-that-is-at-least-32-characters-long';
 const servicesRouter = require('../src/routes/services');
@@ -10,6 +11,17 @@ const schedulesRouter = require('../src/routes/schedules');
 const appointmentsRouter = require('../src/routes/appointments');
 const customersRouter = require('../src/routes/customers');
 const { AdminUser, Appointment, Barber, Customer, Service, WorkingSchedule, sequelize } = require('../src/models');
+
+// Keep reservation windows and working hours independent of the wall clock.
+const RealDate = Date;
+const fixedNow = RealDate.parse('2026-10-28T08:00:00Z');
+test.beforeEach((t) => {
+  globalThis.Date = class extends RealDate {
+    constructor(...args) { super(...(args.length ? args : [fixedNow])); }
+    static now() { return fixedNow; }
+  };
+  t.after(() => { globalThis.Date = RealDate; });
+});
 
 function createTestApp({ adminUserId } = {}) {
   const app = express();
@@ -178,9 +190,14 @@ test('reserva pública con Mercado Pago comienza con pago pendiente', async (t) 
       body: JSON.stringify({ ...validReservation(), paymentMethod: 'mercado_pago' }),
     });
     assert.equal(response.status, 201);
+    const booking = await response.json();
+    assert.equal(typeof booking.paymentToken, 'string');
+    assert.equal(booking.paymentToken.length, 43);
+    assert.equal(JSON.stringify(booking).includes('paymentInitiationTokenHash'), false);
     assert.equal(create.mock.calls[0].arguments[0].paymentMethod, 'mercado_pago');
     assert.equal(create.mock.calls[0].arguments[0].paymentStatus, 'pending');
     assert.equal(create.mock.calls[0].arguments[0].status, 'pending');
+    assert.equal(typeof create.mock.calls[0].arguments[0].paymentInitiationTokenHash, 'string');
   });
 });
 
@@ -205,6 +222,174 @@ test('reserva pública rechaza paymentStatus enviado por el cliente', async (t) 
     });
     assert.equal(response.status, 400);
     assert.equal(createCustomer.mock.callCount(), 0);
+  });
+});
+
+function setTestMercadoPagoToken(t) {
+  const original = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  process.env.MERCADOPAGO_ACCESS_TOKEN = 'test-access-token-not-a-real-credential';
+  t.after(() => {
+    if (original === undefined) delete process.env.MERCADOPAGO_ACCESS_TOKEN;
+    else process.env.MERCADOPAGO_ACCESS_TOKEN = original;
+  });
+}
+
+function mockPaymentAppointment(t, { paymentMethod = 'mercado_pago', exists = true } = {}) {
+  const paymentToken = 'P'.repeat(43);
+  const appointment = exists ? {
+    id: 72,
+    customerId: 24,
+    paymentMethod,
+    paymentStatus: 'pending',
+    status: 'pending',
+    startAt: new Date(Date.now() + 6 * 60 * 60 * 1000),
+    serviceName: 'Corte con tijera',
+    servicePrice: '18500.00',
+    mercadoPagoOrderId: null,
+    mercadoPagoCheckoutUrl: null,
+    mercadoPagoIdempotencyKey: null,
+    paymentInitiationTokenHash: crypto.createHash('sha256').update(paymentToken).digest('hex'),
+    async update(values) { Object.assign(this, values); return this; },
+  } : null;
+  t.mock.method(Appointment, 'unscoped', () => ({
+    findByPk: async (id, options) => {
+      assert.equal(id, 72);
+      assert.ok(options.transaction);
+      assert.equal(options.lock, 'UPDATE');
+      return appointment;
+    },
+  }));
+  t.mock.method(sequelize, 'transaction', async (callback) => callback({ LOCK: { UPDATE: 'UPDATE' } }));
+  return { appointment, paymentToken };
+}
+
+test('inicia Mercado Pago con snapshot de backend, referencia del turno e idempotencia persistida', async (t) => {
+  setTestMercadoPagoToken(t);
+  const { appointment, paymentToken } = mockPaymentAppointment(t);
+  t.mock.method(Customer, 'findByPk', async (id, options) => {
+    assert.equal(id, 24);
+    assert.ok(options.transaction);
+    return { email: 'customer@example.com' };
+  });
+  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const nativeFetch = globalThis.fetch;
+  let providerCalls = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url !== 'https://api.mercadopago.com/v1/orders') return nativeFetch(url, options);
+    providerCalls += 1;
+    assert.equal(url, 'https://api.mercadopago.com/v1/orders');
+    assert.equal(options.method, 'POST');
+    assert.equal(options.headers.Authorization, `Bearer ${accessToken}`);
+    assert.match(options.headers['X-Idempotency-Key'], /^[0-9a-f-]{36}$/i);
+    const payload = JSON.parse(options.body);
+    assert.equal(payload.total_amount, '18500.00');
+    assert.equal(payload.items[0].unit_price, '18500.00');
+    assert.equal(payload.items[0].quantity, 1);
+    assert.equal(payload.items[0].title, 'Corte con tijera');
+    assert.equal(payload.external_reference, 'barberia-appointment-72');
+    assert.equal(payload.payer.email, 'customer@example.com');
+    return {
+      ok: true,
+      status: 201,
+      async json() { return { id: 'order-abc-72', checkout_url: 'https://www.mercadopago.com.ar/checkout/v1/redirect?order_id=order-abc-72' }; },
+    };
+  });
+  await withServer(t, {}, async (base) => {
+    const startPayment = () => fetch(`${base}/api/appointments/72/payment`, {
+      method: 'POST', headers: { 'X-Payment-Token': paymentToken },
+    });
+    const response = await startPayment();
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { checkoutUrl: 'https://www.mercadopago.com.ar/checkout/v1/redirect?order_id=order-abc-72' });
+    assert.equal(appointment.mercadoPagoOrderId, 'order-abc-72');
+    assert.match(appointment.mercadoPagoIdempotencyKey, /^[0-9a-f-]{36}$/i);
+    assert.equal(appointment.paymentStatus, 'pending');
+
+    const repeated = await startPayment();
+    assert.equal(repeated.status, 200);
+    assert.deepEqual(await repeated.json(), { checkoutUrl: appointment.mercadoPagoCheckoutUrl });
+    assert.equal(providerCalls, 1);
+    assert.equal(JSON.stringify({ response: appointment.mercadoPagoCheckoutUrl }).includes(accessToken), false);
+  });
+});
+
+test('no inicia Mercado Pago para reservas en efectivo ni inexistentes', async (t) => {
+  setTestMercadoPagoToken(t);
+  const paymentToken = 'P'.repeat(43);
+  const cashAppointment = {
+    id: 72,
+    paymentMethod: 'cash',
+    paymentStatus: 'pending',
+    status: 'pending',
+    startAt: new Date(Date.now() + 6 * 60 * 60 * 1000),
+    paymentInitiationTokenHash: crypto.createHash('sha256').update(paymentToken).digest('hex'),
+  };
+  let lookupCount = 0;
+  t.mock.method(Appointment, 'unscoped', () => ({
+    findByPk: async () => lookupCount++ === 0 ? cashAppointment : null,
+  }));
+  t.mock.method(sequelize, 'transaction', async (callback) => callback({ LOCK: { UPDATE: 'UPDATE' } }));
+  await withServer(t, {}, async (base) => {
+    const response = await fetch(`${base}/api/appointments/72/payment`, {
+      method: 'POST', headers: { 'X-Payment-Token': paymentToken },
+    });
+    assert.equal(response.status, 409);
+  });
+
+  await withServer(t, {}, async (base) => {
+    const response = await fetch(`${base}/api/appointments/72/payment`, {
+      method: 'POST', headers: { 'X-Payment-Token': 'Q'.repeat(43) },
+    });
+    assert.equal(response.status, 404);
+  });
+});
+
+test('rechaza token de pago incorrecto y campos de precio enviados por frontend', async (t) => {
+  setTestMercadoPagoToken(t);
+  const { paymentToken } = mockPaymentAppointment(t);
+  const nativeFetch = globalThis.fetch;
+  let providerCalls = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url !== 'https://api.mercadopago.com/v1/orders') return nativeFetch(url, options);
+    providerCalls += 1;
+    throw new Error('External API must not be called');
+  });
+  await withServer(t, {}, async (base) => {
+    const invalidToken = await fetch(`${base}/api/appointments/72/payment`, {
+      method: 'POST', headers: { 'X-Payment-Token': 'X'.repeat(43) },
+    });
+    assert.equal(invalidToken.status, 404);
+    const alteredPrice = await fetch(`${base}/api/appointments/72/payment`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'X-Payment-Token': paymentToken },
+      body: JSON.stringify({ total_amount: '1.00', price: 1 }),
+    });
+    assert.equal(alteredPrice.status, 400);
+    assert.equal(providerCalls, 0);
+  });
+});
+
+test('maneja errores de Mercado Pago de forma genérica sin exponer Access Token', async (t) => {
+  setTestMercadoPagoToken(t);
+  const { paymentToken } = mockPaymentAppointment(t);
+  t.mock.method(Customer, 'findByPk', async () => ({ email: 'customer@example.com' }));
+  const nativeFetch = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', async (url, options) => url === 'https://api.mercadopago.com/v1/orders' ? ({
+    ok: false,
+    status: 401,
+    async json() { return { message: 'authorization failed', access_token: process.env.MERCADOPAGO_ACCESS_TOKEN }; },
+  }) : nativeFetch(url, options));
+  const logged = [];
+  t.mock.method(console, 'error', (...args) => logged.push(args));
+  await withServer(t, {}, async (base) => {
+    const response = await fetch(`${base}/api/appointments/72/payment`, {
+      method: 'POST', headers: { 'X-Payment-Token': paymentToken },
+    });
+    const body = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(JSON.stringify(body).includes(process.env.MERCADOPAGO_ACCESS_TOKEN), false);
+    assert.deepEqual(Object.keys(body), ['error']);
+    assert.equal(JSON.stringify(logged).includes(process.env.MERCADOPAGO_ACCESS_TOKEN), false);
   });
 });
 

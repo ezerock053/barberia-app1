@@ -7,6 +7,7 @@ const schedulesRouter = require('./routes/schedules');
 const customersRouter = require('./routes/customers');
 const appointmentsRouter = require('./routes/appointments');
 const availabilityRouter = require('./routes/availability');
+const { createMercadoPagoWebhookRouter } = require('./routes/mercadoPagoWebhook');
 const createAuthRouter = require('./routes/auth');
 const { createSessionMiddleware } = require('./middleware/session');
 const { sequelize } = require('./models');
@@ -26,6 +27,7 @@ app.use('/api/auth', createAuthRouter({
 app.use('/api/services', servicesRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/appointments', appointmentsRouter);
+app.use('/api/webhooks', createMercadoPagoWebhookRouter());
 app.use('/api/availability', availabilityRouter);
 app.use('/api/barbers/:barberId/schedules', schedulesRouter);
 app.use('/api/barbers', barbersRouter);

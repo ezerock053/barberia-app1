@@ -74,6 +74,25 @@ module.exports = (sequelize, DataTypes) => {
           isIn: [['pending', 'paid', 'rejected', 'cancelled']],
         },
       },
+      mercadoPagoOrderId: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        unique: true,
+      },
+      mercadoPagoIdempotencyKey: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        unique: true,
+      },
+      mercadoPagoCheckoutUrl: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      paymentInitiationTokenHash: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        unique: true,
+      },
       serviceName: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -92,6 +111,11 @@ module.exports = (sequelize, DataTypes) => {
       modelName: 'Appointment',
       tableName: 'appointments',
       timestamps: true,
+      defaultScope: {
+        attributes: {
+          exclude: ['mercadoPagoOrderId', 'mercadoPagoIdempotencyKey', 'mercadoPagoCheckoutUrl', 'paymentInitiationTokenHash'],
+        },
+      },
     },
   );
 

@@ -1,10 +1,12 @@
 'use strict';
 
 const express = require('express');
+const crypto = require('node:crypto');
 const { Op } = require('sequelize');
 const { Appointment, Barber, Customer, Service, WorkingSchedule, sequelize } = require('../models');
 const { getReservationWindowError } = require('../utils/reservationWindow');
 const requireAdmin = require('../middleware/requireAdmin');
+const { createCheckoutOrder, MercadoPagoError } = require('../utils/mercadoPago');
 
 const router = express.Router();
 const statuses = ['pending', 'confirmed', 'completed', 'cancelled', 'no_show'];
@@ -144,6 +146,26 @@ function validateBookingCustomer(customer) {
   return null;
 }
 
+function paymentTokenHash(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function paymentTokenMatches(token, expectedHash) {
+  if (typeof token !== 'string' || token.length !== 43 || typeof expectedHash !== 'string') return false;
+  const providedHash = Buffer.from(paymentTokenHash(token), 'hex');
+  const storedHash = Buffer.from(expectedHash, 'hex');
+  return storedHash.length === providedHash.length && crypto.timingSafeEqual(providedHash, storedHash);
+}
+
+function canStartMercadoPagoPayment(appointment) {
+  const appointmentTime = new Date(appointment.startAt).getTime();
+  return appointment.paymentMethod === 'mercado_pago'
+    && appointment.paymentStatus === 'pending'
+    && !['cancelled', 'completed', 'no_show'].includes(appointment.status)
+    && Number.isFinite(appointmentTime)
+    && appointmentTime > Date.now();
+}
+
 function buildWhere(query) {
   const where = {};
   for (const field of ['barberId', 'customerId']) {
@@ -220,6 +242,7 @@ router.post('/', async (req, res) => {
   const startAt = parseDateTime(publicBody.startAt);
   const barberId = Number(publicBody.barberId);
   const serviceId = Number(publicBody.serviceId);
+  const paymentToken = publicBody.paymentMethod === 'mercado_pago' ? crypto.randomBytes(32).toString('base64url') : null;
   const reservationWindowError = getReservationWindowError(startAt);
   if (reservationWindowError) return res.status(400).json({ error: reservationWindowError });
 
@@ -258,17 +281,108 @@ router.post('/', async (req, res) => {
         servicePrice: service.price,
         paymentMethod: publicBody.paymentMethod,
         paymentStatus: 'pending',
+        ...(paymentToken ? { paymentInitiationTokenHash: paymentTokenHash(paymentToken) } : {}),
         notes: publicBody.notes?.trim() || null,
         status: 'pending',
       }, { transaction });
       return {
         status: 201,
-        body: { id: appointment.id, startAt: appointment.startAt, endAt: appointment.endAt },
+        body: {
+          id: appointment.id,
+          startAt: appointment.startAt,
+          endAt: appointment.endAt,
+          ...(paymentToken ? { paymentToken } : {}),
+        },
       };
     });
     return res.status(result.status).json(result.body);
   } catch {
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/:id/payment', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(404).json({ error: 'Appointment not found or payment cannot be started' });
+  if (req.body !== undefined
+    && (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).length > 0)) {
+    return res.status(400).json({ error: 'Payment details are taken from the stored appointment' });
+  }
+  const token = req.get('X-Payment-Token');
+  if (typeof token !== 'string' || token.length !== 43) {
+    return res.status(404).json({ error: 'Appointment not found or payment cannot be started' });
+  }
+  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+
+  try {
+    const paymentRequest = await sequelize.transaction(async (transaction) => {
+      const appointment = await Appointment.unscoped().findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!appointment || !paymentTokenMatches(token, appointment.paymentInitiationTokenHash)) {
+        return { status: 404, body: { error: 'Appointment not found or payment cannot be started' } };
+      }
+      if (!canStartMercadoPagoPayment(appointment)) {
+        return { status: 409, body: { error: 'Payment cannot be started for this appointment' } };
+      }
+      if (appointment.mercadoPagoOrderId && appointment.mercadoPagoCheckoutUrl) {
+        return { checkoutUrl: appointment.mercadoPagoCheckoutUrl };
+      }
+      if (appointment.mercadoPagoOrderId || appointment.mercadoPagoCheckoutUrl) {
+        throw new Error('Inconsistent Mercado Pago order state');
+      }
+      if (!appointment.mercadoPagoIdempotencyKey) {
+        await appointment.update({ mercadoPagoIdempotencyKey: crypto.randomUUID() }, { transaction });
+      }
+      const customer = await Customer.findByPk(appointment.customerId, { transaction });
+      if (!customer) throw new Error('Appointment customer not found');
+      return {
+        id: appointment.id,
+        serviceName: appointment.serviceName,
+        servicePrice: appointment.servicePrice,
+        customerEmail: customer.email,
+        idempotencyKey: appointment.mercadoPagoIdempotencyKey || appointment.get('mercadoPagoIdempotencyKey'),
+      };
+    });
+
+    if (paymentRequest.status) return res.status(paymentRequest.status).json(paymentRequest.body);
+    if (paymentRequest.checkoutUrl) return res.status(200).json({ checkoutUrl: paymentRequest.checkoutUrl });
+    if (!accessToken) return res.status(503).json({ error: 'Payment service is not configured' });
+
+    const result = await sequelize.transaction(async (transaction) => {
+      const appointment = await Appointment.unscoped().findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!appointment || !paymentTokenMatches(token, appointment.paymentInitiationTokenHash)) {
+        return { status: 404, body: { error: 'Appointment not found or payment cannot be started' } };
+      }
+      if (appointment.mercadoPagoOrderId && appointment.mercadoPagoCheckoutUrl) {
+        return { checkoutUrl: appointment.mercadoPagoCheckoutUrl };
+      }
+      if (!canStartMercadoPagoPayment(appointment)) {
+        return { status: 409, body: { error: 'Payment cannot be started for this appointment' } };
+      }
+      if (!appointment.mercadoPagoIdempotencyKey || appointment.mercadoPagoIdempotencyKey !== paymentRequest.idempotencyKey) {
+        throw new Error('Inconsistent Mercado Pago idempotency state');
+      }
+      const order = await createCheckoutOrder({
+        accessToken,
+        idempotencyKey: paymentRequest.idempotencyKey,
+        appointmentId: appointment.id,
+        serviceName: appointment.serviceName,
+        servicePrice: appointment.servicePrice,
+        customerEmail: paymentRequest.customerEmail,
+      });
+      await appointment.update({
+        mercadoPagoOrderId: order.orderId,
+        mercadoPagoCheckoutUrl: order.checkoutUrl,
+      }, { transaction });
+      return { checkoutUrl: order.checkoutUrl };
+    });
+    if (result.status) return res.status(result.status).json(result.body);
+    return res.status(200).json({ checkoutUrl: result.checkoutUrl });
+  } catch (error) {
+    if (error instanceof MercadoPagoError) {
+      console.error('Mercado Pago order creation failed', { status: error.status });
+      return res.status(502).json({ error: 'Could not start Mercado Pago checkout' });
+    }
+    return res.status(500).json({ error: 'Could not start Mercado Pago checkout' });
   }
 });
 

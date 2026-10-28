@@ -55,6 +55,10 @@ export const getAvailability = (barberId, date) =>
   request(`/availability?barberId=${encodeURIComponent(barberId)}&date=${encodeURIComponent(date)}`);
 export const createCustomer = (customer) => post('/customers', customer);
 export const createAppointment = (appointment) => post('/appointments', appointment);
+export const createMercadoPagoOrder = (appointmentId, paymentToken) => request(`/appointments/${encodeURIComponent(appointmentId)}/payment`, {
+  method: 'POST',
+  headers: { 'X-Payment-Token': paymentToken },
+});
 export const getAppointments = (filters = {}) => {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {

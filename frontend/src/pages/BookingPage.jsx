@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
-import { ApiError, createAppointment, getAvailability, getBarbers, getServices } from '../services/api.js';
+import { ApiError, createAppointment, createMercadoPagoOrder, getAvailability, getBarbers, getServices } from '../services/api.js';
 
 const steps = ['Servicio', 'Barbero', 'Fecha y hora', 'Tus datos', 'Confirmación'];
 const emptyCustomer = { name: '', phone: '', email: '', notes: '' };
@@ -36,6 +36,7 @@ export default function BookingPage() {
   const [slots, setSlots] = useState([]);
   const [customer, setCustomer] = useState(emptyCustomer);
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [pendingPayment, setPendingPayment] = useState(null);
   const [step, setStep] = useState(1);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -110,19 +111,41 @@ export default function BookingPage() {
     setError('');
     setSubmitting(true);
     try {
-      await createAppointment({
-        customer: {
-          name: customer.name.trim(),
-          phone: customer.phone.trim(),
-          email: customer.email.trim(),
-        },
-        barberId: Number(barberId),
-        serviceId: Number(serviceId),
-        startAt: `${date} ${selectedSlot}:00`,
-        paymentMethod,
-        notes: customer.notes.trim(),
-      });
-      setConfirmation(true);
+      if (paymentMethod === 'mercado_pago') {
+        let payment = pendingPayment;
+        if (!payment) {
+          const appointment = await createAppointment({
+            customer: {
+              name: customer.name.trim(),
+              phone: customer.phone.trim(),
+              email: customer.email.trim(),
+            },
+            barberId: Number(barberId),
+            serviceId: Number(serviceId),
+            startAt: `${date} ${selectedSlot}:00`,
+            paymentMethod,
+            notes: customer.notes.trim(),
+          });
+          payment = { appointmentId: appointment.id, paymentToken: appointment.paymentToken };
+          setPendingPayment(payment);
+        }
+        const { checkoutUrl } = await createMercadoPagoOrder(payment.appointmentId, payment.paymentToken);
+        window.location.assign(checkoutUrl);
+      } else {
+        await createAppointment({
+          customer: {
+            name: customer.name.trim(),
+            phone: customer.phone.trim(),
+            email: customer.email.trim(),
+          },
+          barberId: Number(barberId),
+          serviceId: Number(serviceId),
+          startAt: `${date} ${selectedSlot}:00`,
+          paymentMethod,
+          notes: customer.notes.trim(),
+        });
+        setConfirmation(true);
+      }
     } catch (submitError) {
       setError(errorMessage(submitError));
       if (submitError instanceof ApiError && submitError.status === 409) {
@@ -154,7 +177,7 @@ export default function BookingPage() {
         {step === 2 && <><h2 className="booking-step-title">Elegí tu barbero</h2>{barbers.length ? <Row className="g-3">{barbers.map((item) => <Col sm={6} md={4} key={item.id}><Card className={`choice-card barber-choice h-100 ${barberId === String(item.id) ? 'selected' : ''}`}><Card.Body><Form.Check type="radio" name="barber" id={`barber-${item.id}`} value={item.id} checked={barberId === String(item.id)} onChange={() => setBarberId(String(item.id))} label={<><span className="barber-choice-avatar">{item.image ? <img src={item.image} alt="" /> : item.name?.charAt(0)?.toUpperCase()}</span><strong>{item.name}</strong></>} /></Card.Body></Card></Col>)}</Row> : <Alert variant="info">Por el momento no hay barberos disponibles.</Alert>}<div className="booking-actions"><Button variant="outline-light" onClick={() => setStep(1)}>Atrás</Button><Button variant="warning" onClick={goNext} disabled={!barberId || !barbers.length}>Continuar</Button></div></>}
         {step === 3 && <><h2 className="booking-step-title">Elegí el día y el horario</h2><Row className="g-3"><Col md={6}><Form.Group><Form.Label>Fecha</Form.Label><Form.Control type="date" min={today} max={maxDate} value={date} onChange={(event) => setDate(event.target.value)} /><Form.Text className="muted-copy">Podés reservar entre hoy y los próximos 30 días.</Form.Text></Form.Group></Col><Col md={6}><div className="availability"><Form.Label>Horarios disponibles</Form.Label>{!date ? <p className="muted-copy">Seleccioná una fecha para ver los horarios.</p> : loadingSlots ? <div><Spinner animation="border" size="sm" role="status" /> <span className="muted-copy">Buscando horarios…</span></div> : slots.length ? <div className="d-flex flex-wrap gap-2">{slots.map((slot) => <Button key={slot} type="button" variant={selectedSlot === slot ? 'warning' : 'outline-light'} className="slot-button" aria-pressed={selectedSlot === slot} onClick={() => setSelectedSlot(slot)}>{slot}</Button>)}</div> : <p className="muted-copy mb-0">No hay horarios disponibles para este día.</p>}</div></Col></Row><div className="booking-actions"><Button variant="outline-light" onClick={() => setStep(2)}>Atrás</Button><Button variant="warning" onClick={goNext} disabled={!selectedSlot || loadingSlots}>Continuar</Button></div></>}
         {step === 4 && <><h2 className="booking-step-title">Tus datos</h2><Form id="customer-details" onSubmit={(event) => { event.preventDefault(); goNext(); }}><Row className="g-3"><Col md={6}><Form.Group><Form.Label>Nombre</Form.Label><Form.Control autoComplete="name" value={customer.name} onChange={(event) => updateCustomer('name', event.target.value)} required maxLength={255} /></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Teléfono</Form.Label><Form.Control type="tel" autoComplete="tel" value={customer.phone} onChange={(event) => updateCustomer('phone', event.target.value)} required maxLength={50} /></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Email</Form.Label><Form.Control type="email" autoComplete="email" value={customer.email} onChange={(event) => updateCustomer('email', event.target.value)} required maxLength={255} /></Form.Group></Col><Col xs={12}><Form.Group><Form.Label>Observaciones <span className="muted-copy">(opcional)</span></Form.Label><Form.Control as="textarea" rows={3} value={customer.notes} onChange={(event) => updateCustomer('notes', event.target.value)} maxLength={255} /></Form.Group></Col></Row></Form><div className="booking-actions"><Button variant="outline-light" onClick={() => setStep(3)}>Atrás</Button><Button variant="warning" type="submit" form="customer-details">Ver resumen</Button></div></>}
-        {step === 5 && <><h2 className="booking-step-title">Revisá tu reserva</h2><div className="booking-summary"><p><span>Servicio</span>{service?.name} · ${Number(service?.price || 0).toLocaleString('es-AR')}</p><p><span>Barbero</span>{barber?.name}</p><p><span>Fecha</span>{formatDate(date)}</p><p><span>Hora</span>{selectedSlot}</p><hr /><p><span>Nombre</span>{customer.name}</p><p><span>Teléfono</span>{customer.phone}</p><p><span>Email</span>{customer.email}</p><p><span>Observaciones</span>{customer.notes.trim() || 'Sin observaciones'}</p><Form.Group className="mt-3"><Form.Label>Método de pago</Form.Label><Form.Check type="radio" name="paymentMethod" id="payment-cash" value="cash" checked={paymentMethod === 'cash'} onChange={() => setPaymentMethod('cash')} label="Efectivo" /><Form.Check type="radio" name="paymentMethod" id="payment-mercado-pago" value="mercado_pago" checked={paymentMethod === 'mercado_pago'} onChange={() => setPaymentMethod('mercado_pago')} label="Mercado Pago" /><Form.Text className="muted-copy">El pago no se procesa en esta etapa.</Form.Text></Form.Group></div><div className="booking-actions"><Button variant="outline-light" onClick={() => setStep(4)} disabled={submitting}>Editar datos</Button><Button variant="warning" onClick={confirmBooking} disabled={submitting}>{submitting ? <><Spinner as="span" animation="border" size="sm" className="me-2" />Confirmando…</> : 'Confirmar turno'}</Button></div></>}
+        {step === 5 && <><h2 className="booking-step-title">Revisá tu reserva</h2><div className="booking-summary"><p><span>Servicio</span>{service?.name} · ${Number(service?.price || 0).toLocaleString('es-AR')}</p><p><span>Barbero</span>{barber?.name}</p><p><span>Fecha</span>{formatDate(date)}</p><p><span>Hora</span>{selectedSlot}</p><hr /><p><span>Nombre</span>{customer.name}</p><p><span>Teléfono</span>{customer.phone}</p><p><span>Email</span>{customer.email}</p><p><span>Observaciones</span>{customer.notes.trim() || 'Sin observaciones'}</p><Form.Group className="mt-3"><Form.Label>Método de pago</Form.Label><Form.Check type="radio" name="paymentMethod" id="payment-cash" value="cash" disabled={Boolean(pendingPayment)} checked={paymentMethod === 'cash'} onChange={() => setPaymentMethod('cash')} label="Efectivo" /><Form.Check type="radio" name="paymentMethod" id="payment-mercado-pago" value="mercado_pago" disabled={Boolean(pendingPayment)} checked={paymentMethod === 'mercado_pago'} onChange={() => setPaymentMethod('mercado_pago')} label="Mercado Pago" />{pendingPayment && <Form.Text className="d-block muted-copy">La reserva ya está creada. Podés reintentar el inicio del pago sin crear otro turno.</Form.Text>}</Form.Group></div><div className="booking-actions"><Button variant="outline-light" onClick={() => setStep(4)} disabled={submitting || Boolean(pendingPayment)}>Editar datos</Button><Button variant="warning" onClick={confirmBooking} disabled={submitting}>{submitting ? <><Spinner as="span" animation="border" size="sm" className="me-2" />{paymentMethod === 'mercado_pago' ? 'Preparando pago…' : 'Confirmando…'}</> : paymentMethod === 'mercado_pago' ? 'Continuar a Mercado Pago' : 'Confirmar turno'}</Button></div></>}
       </>}
     </Card.Body></Card>
   </Container></section>;
