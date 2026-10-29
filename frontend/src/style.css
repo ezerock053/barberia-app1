@@ -43,6 +43,7 @@ a { color: inherit; }
 .form-control:focus, .form-select:focus { background-color: #171815; color: #f5f1e9; border-color: #d7ad69; box-shadow: 0 0 0 .2rem #d7ad6933; }
 .availability h2 { font-family: Georgia, serif; font-size: 1.5rem; margin-bottom: 1rem; }
 .slot-button { border-color: #67665d; }
+.ux-retry { min-height: 44px; margin: .35rem .5rem; white-space: normal; }
 .booking-steps { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0 0 1.5rem; }
 .booking-step { display: flex; align-items: center; gap: .55rem; color: #87877f; font-size: .8rem; }
 .booking-step > span { display: grid; place-items: center; flex: 0 0 2rem; width: 2rem; height: 2rem; border: 1px solid #55564f; border-radius: 50%; }

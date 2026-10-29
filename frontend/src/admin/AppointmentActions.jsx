@@ -14,10 +14,11 @@ export function AppointmentPayment({ appointment }) {
   </span>;
 }
 
-export function AppointmentCard({ appointment, onUpdated, statusControl, showDate = false }) {
+export function AppointmentCard({ appointment, onUpdated, statusControl, showDate = false, isNext = false }) {
   const charge = appointment.charge;
   const time = formatAgendaTime(appointment.startAt);
-  return <Card as="article" className="admin-card appointment-card"><Card.Body>
+  return <Card as="article" className={`admin-card appointment-card${isNext ? ' appointment-next' : ''}`}><Card.Body>
+    {isNext && <Badge bg="warning" text="dark" className="mb-2">Próximo turno</Badge>}
     <div className="appointment-card-heading">
       <time className="appointment-time" dateTime={appointment.startAt}>{time}</time>
       <div className="appointment-person"><h2>{appointment.customer?.name || `Turno #${appointment.id}`}</h2><p>{appointment.serviceName}</p></div>
@@ -31,6 +32,7 @@ export function AppointmentCard({ appointment, onUpdated, statusControl, showDat
     <AppointmentActions appointment={appointment} onUpdated={onUpdated} />
     <details className="appointment-details"><summary>Ver detalle{charge ? ' del cobro' : ' del turno'}</summary>
       <div>{formatAgendaDate(appointment.startAt)} · {appointment.customer?.phone || 'Sin teléfono'}</div>
+      {typeof appointment.notes === 'string' && appointment.notes.trim() && <div className="appointment-notes"><strong>Observaciones del cliente</strong><p>{appointment.notes}</p></div>}
       {charge && <><div>{formatPrice(charge.amount)} · {paymentMethodLabels[charge.method]} · {formatAgendaDate(charge.paidAt)}</div>
         <div>Registrado por {charge.recordedBy?.email || (charge.recordedByUserId ? `usuario #${charge.recordedByUserId}` : 'Mercado Pago')}</div>
         {charge.dateSource !== 'operator' && <div>{charge.dateSource === 'verified_at' ? 'Fecha de verificación' : 'Fecha informada por Mercado Pago'}</div>}

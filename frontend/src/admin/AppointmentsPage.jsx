@@ -4,13 +4,15 @@ import { getAdminBarbers, getAppointment, getAppointments, updateAppointment } f
 import { appointmentStatuses, statusLabels } from './adminUtils.js';
 import { AppointmentCard } from './AppointmentActions.jsx';
 import { agendaDateString } from './agendaTime.js';
+import { useLatestQuery } from '../utils/useLatestQuery.js';
 
 export default function AppointmentsPage() {
   const [barbers, setBarbers] = useState([]);
   const [focusedId, setFocusedId] = useState(() => new URLSearchParams(window.location.search).get('appointmentId'));
-  const [appointments, setAppointments] = useState([]);
   const [filters, setFilters] = useState(() => ({ date: agendaDateString(), barberId: '', status: '' }));
-  const [loading, setLoading] = useState(true);
+  const { data: appointments, setData: setAppointments, loading, error: loadError, refresh } = useLatestQuery(JSON.stringify([filters, focusedId]), () => focusedId
+    ? getAppointment(focusedId).then((item) => [item])
+    : getAppointments({ ...(filters.date ? { agendaDate: filters.date } : {}), ...(filters.barberId ? { barberId: filters.barberId } : {}), ...(filters.status ? { status: filters.status } : {}) }));
   const [changingId, setChangingId] = useState(null);
   const [error, setError] = useState('');
   const applyUpdate = (updated) => setAppointments((current) => current.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
@@ -20,21 +22,6 @@ export default function AppointmentsPage() {
     getAdminBarbers().then((items) => { if (active) setBarbers(items); }).catch((requestError) => { if (active) setError(requestError.message); });
     return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError('');
-    const query = {
-      ...(filters.date ? { agendaDate: filters.date } : {}),
-      ...(filters.barberId ? { barberId: filters.barberId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
-    };
-    (focusedId ? getAppointment(focusedId).then((item) => [item]) : getAppointments(query)).then((items) => { if (active) setAppointments(items); })
-      .catch((requestError) => { if (active) setError(requestError.message || 'No pudimos cargar los turnos.'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [filters, focusedId]);
 
   async function changeStatus(appointment, status) {
     if (status === appointment.status) return;
@@ -68,10 +55,11 @@ export default function AppointmentsPage() {
       <div className="admin-filter-count">{loading ? 'Actualizando…' : `${appointments.length} turnos`}</div>
     </fieldset>
     {error && <Alert variant="warning" dismissible onClose={() => setError('')}>{error}</Alert>}
+    {loadError && <Alert variant="warning">{loadError} <Button variant="outline-dark" className="ux-retry" onClick={refresh}>Reintentar</Button></Alert>}
     <div>
       {loading ? <div className="admin-loading"><Spinner animation="border" role="status" /><span>Cargando turnos…</span></div> : appointments.length ? <>
         <div className="appointments-grid">{appointments.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} onUpdated={applyUpdate} statusControl={statusControl(appointment)} showDate />)}</div>
-      </> : <p className="admin-empty mb-0">No hay turnos que coincidan con estos filtros.</p>}
+      </> : !loadError && <p className="admin-empty mb-0">No hay turnos que coincidan con estos filtros.</p>}
     </div>
   </>;
 }

@@ -37,3 +37,4 @@ Los nombres y precios cargados son datos ficticios para desarrollo; reemplazalos
 - [Finalización y cobros presenciales](docs/service-completion-and-charges.md)
 - [Dashboard financiero: cálculos y prueba manual](docs/financial-dashboard.md)
 - [Convención de fechas y horarios de reservas](docs/reservation-timezone.md)
+- [Mejoras UX: agenda, observaciones y reintentos](docs/ux-agenda-and-retries.md)

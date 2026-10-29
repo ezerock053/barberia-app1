@@ -4,6 +4,8 @@
 .agenda-toolbar .btn { min-height: 44px; }
 .appointments-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); align-items: start; gap: 1rem; }
 .appointment-card { border-radius: 14px; border-color: #393a32; }
+.appointment-next { border-color: #d7ad69; box-shadow: 0 0 0 1px #d7ad6944; }
+.appointment-notes p { white-space: pre-wrap; overflow-wrap: anywhere; margin: .35rem 0 0; }
 .appointment-card .card-body { padding: 1rem; }
 .appointment-card-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .85rem; align-items: start; }
 .appointment-time { font-size: 1.45rem; line-height: 1.3; font-weight: 750; color: #e6bd7a; letter-spacing: -.04em; }
