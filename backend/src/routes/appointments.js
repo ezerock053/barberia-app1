@@ -6,6 +6,8 @@ const { Op } = require('sequelize');
 const { Appointment, Barber, Customer, Service, WorkingSchedule, Charge, AdminUser, sequelize } = require('../models');
 const { protectedEditError, completionFields, publicAppointment } = require('../utils/settlement');
 const { getReservationWindowError } = require('../utils/reservationWindow');
+const { businessDayRange } = require('../utils/businessDay');
+const { businessTime, parseAppointmentTime } = require('../utils/appointmentTime');
 const requireAdmin = require('../middleware/requireAdmin');
 const requireUser = require('../middleware/requireUser');
 const { createCheckoutOrder, MercadoPagoError } = require('../utils/mercadoPago');
@@ -28,24 +30,11 @@ function parseId(value) {
 }
 
 function isValidDateTime(value, requireExactHour = false) {
-  if (typeof value !== 'string') return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/.exec(value);
-  if (!match) return false;
-  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
-  const year = Number(yearText);
-  const month = Number(monthText);
-  const day = Number(dayText);
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  const second = Number(secondText);
-  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return false;
-  if (hour > 23 || minute > 59 || second > 59) return false;
-  return !requireExactHour || (minute === 0 && second === 0 && (!match[7] || Number(match[7]) === 0));
+  return parseAppointmentTime(value, requireExactHour) !== null;
 }
 
 function parseDateTime(value) {
-  return new Date(`${value.replace(' ', 'T')}Z`);
+  return parseAppointmentTime(value);
 }
 
 function isValidDateFilter(value) {
@@ -99,7 +88,8 @@ function timeToSeconds(value) {
 
 function fitsSchedule(schedule, startAt) {
   if (!schedule) return false;
-  const startSeconds = startAt.getUTCHours() * 3600 + startAt.getUTCMinutes() * 60 + startAt.getUTCSeconds();
+  const local = businessTime(startAt);
+  const startSeconds = local.hour * 3600 + local.minute * 60 + local.second;
   const scheduleStart = timeToSeconds(schedule.startTime);
   const scheduleEnd = timeToSeconds(schedule.endTime);
   const appointmentEnd = startSeconds + 60 * 60;
@@ -120,7 +110,7 @@ async function lockBarbers(barberIds, transaction) {
 
 async function getSchedule(barberId, startAt, transaction) {
   return WorkingSchedule.findOne({
-    where: { barberId, dayOfWeek: startAt.getUTCDay() },
+    where: { barberId, dayOfWeek: businessTime(startAt).dayOfWeek },
     transaction,
     lock: transaction.LOCK.UPDATE,
   });
@@ -213,10 +203,8 @@ router.get('/', requireUser, async (req, res) => {
       || !isValidDateFilter(req.query.agendaDate) || req.query.from !== undefined || req.query.to !== undefined) {
       return res.status(400).json({ error: 'agendaDate must be YYYY-MM-DD and cannot be combined with from/to' });
     }
-    // America/Argentina/Buenos_Aires uses UTC-03:00 for this application's dates.
-    // Filter stored instants; never rewrite historical appointments.
-    const start = new Date(`${req.query.agendaDate}T00:00:00-03:00`);
-    parsed.where.startAt = { [Op.gte]: start, [Op.lt]: new Date(start.getTime() + 86400000) };
+    const { start, end } = businessDayRange(req.query.agendaDate);
+    parsed.where.startAt = { [Op.gte]: start, [Op.lt]: end };
   }
   try {
     const appointments = await Appointment.findAll({

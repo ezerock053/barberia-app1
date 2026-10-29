@@ -4,6 +4,8 @@ const express = require('express');
 const { Op } = require('sequelize');
 const { Appointment, Barber, WorkingSchedule } = require('../models');
 const { isWithinReservationWindow } = require('../utils/reservationWindow');
+const { businessDayRange } = require('../utils/businessDay');
+const { slotInstant } = require('../utils/appointmentTime');
 
 const router = express.Router();
 
@@ -45,7 +47,7 @@ router.get('/', async (req, res) => {
 
     const dayOfWeek = date.getUTCDay();
     const schedule = await WorkingSchedule.findOne({ where: { barberId, dayOfWeek } });
-    if (!schedule) return res.status(200).json({ date: req.query.date, barberId, availableSlots: [] });
+    if (!schedule) return res.status(200).json({ date: req.query.date, barberId, availableSlots: [], slotStartsAt: {} });
 
     const startMinute = timeToMinutes(schedule.startTime);
     const endMinute = timeToMinutes(schedule.endTime);
@@ -53,33 +55,32 @@ router.get('/', async (req, res) => {
       return res.status(500).json({ error: 'Invalid working schedule' });
     }
 
-    const nextDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
+    const { start, end } = businessDayRange(req.query.date);
     const appointments = await Appointment.findAll({
       attributes: ['startAt'],
       where: {
         barberId,
         status: { [Op.ne]: 'cancelled' },
-        startAt: { [Op.gte]: date, [Op.lt]: nextDate },
+        startAt: { [Op.gte]: start, [Op.lt]: end },
       },
     });
-    const occupiedSlots = new Set(appointments.map((appointment) => {
-      const startAt = new Date(appointment.startAt);
-      return `${String(startAt.getUTCHours()).padStart(2, '0')}:${String(startAt.getUTCMinutes()).padStart(2, '0')}`;
-    }));
+    const occupiedSlots = new Set(appointments.map((appointment) => new Date(appointment.startAt).getTime()));
 
     const availableSlots = [];
+    const slotStartsAt = {};
     const now = new Date();
     let slotStart = Math.ceil(startMinute / 60) * 60;
     while (slotStart + 60 <= endMinute) {
       const slot = `${String(Math.floor(slotStart / 60)).padStart(2, '0')}:${String(slotStart % 60).padStart(2, '0')}`;
-      const slotAt = new Date(date.getTime() + slotStart * 60 * 1000);
-      if (!occupiedSlots.has(slot) && isWithinReservationWindow(slotAt, now)) {
+      const slotAt = slotInstant(req.query.date, slot);
+      if (slotAt && !occupiedSlots.has(slotAt.getTime()) && isWithinReservationWindow(slotAt, now)) {
         availableSlots.push(slot);
+        slotStartsAt[slot] = slotAt.toISOString();
       }
       slotStart += 60;
     }
 
-    return res.status(200).json({ date: req.query.date, barberId, availableSlots });
+    return res.status(200).json({ date: req.query.date, barberId, availableSlots, slotStartsAt });
   } catch {
     return res.status(500).json({ error: 'Internal server error' });
   }

@@ -11,6 +11,7 @@ const schedulesRouter = require('../src/routes/schedules');
 const appointmentsRouter = require('../src/routes/appointments');
 const customersRouter = require('../src/routes/customers');
 const { AdminUser, Appointment, Barber, Customer, Service, WorkingSchedule, sequelize } = require('../src/models');
+const { businessTime } = require('../src/utils/appointmentTime');
 
 // Keep reservation windows and working hours independent of the wall clock.
 const RealDate = Date;
@@ -70,7 +71,7 @@ function mockTransaction(t) {
 }
 
 function scheduleFor(startAt) {
-  return { barberId: 1, dayOfWeek: startAt.getUTCDay(), startTime: '00:00:00', endTime: '23:59:59' };
+  return { barberId: 1, dayOfWeek: businessTime(startAt).dayOfWeek, startTime: '00:00:00', endTime: '23:59:59' };
 }
 
 test('API privada rechaza llamadas sin sesión y sesiones de administradores inactivos', async (t) => {
@@ -412,7 +413,7 @@ test('reserva pública rechaza horarios fuera de agenda o en días sin horario',
   t.mock.method(Barber, 'findAll', async () => [{ id: 1, active: true }]);
   t.mock.method(Service, 'findByPk', async () => ({ id: 1, active: true, name: 'Corte', price: '12000.00' }));
   t.mock.method(WorkingSchedule, 'findOne', async () => {
-    const requestedHour = new Date(`${reservation.startAt.replace(' ', 'T')}Z`).getUTCHours();
+    const requestedHour = businessTime(new Date(`${reservation.startAt.replace(' ', 'T')}Z`)).hour;
     return { startTime: '00:00:00', endTime: `${String(requestedHour).padStart(2, '0')}:00:00` };
   });
   const customerCreate = t.mock.method(Customer, 'create', async () => ({ id: 1 }));
@@ -510,7 +511,7 @@ test('reprogramación administrativa también valida que la hora quepa en agenda
   });
   t.mock.method(WorkingSchedule, 'findOne', async () => ({
     startTime: '00:00:00',
-    endTime: `${String(start.getUTCHours()).padStart(2, '0')}:00:00`,
+    endTime: `${String(businessTime(start).hour).padStart(2, '0')}:00:00`,
   }));
   await withServer(t, { adminUserId: 1 }, async (base) => {
     const response = await fetch(`${base}/api/appointments/1`, {

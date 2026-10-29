@@ -1,21 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
 import { ApiError, createAppointment, createMercadoPagoOrder, getAvailability, getBarbers, getServices } from '../services/api.js';
+import { bookingDateLimits, bookingStartAt, formatBookingDate } from '../utils/bookingTime.js';
 
 const steps = ['Servicio', 'Barbero', 'Fecha y hora', 'Tus datos', 'Confirmación'];
 const emptyCustomer = { name: '', phone: '', email: '', notes: '' };
 
-function localDateString(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 function formatDate(date) {
-  return new Date(`${date}T12:00:00`).toLocaleDateString('es-AR', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  });
+  return formatBookingDate(date);
 }
 
 function errorMessage(error) {
@@ -34,6 +26,7 @@ export default function BookingPage() {
   const [date, setDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState('');
   const [slots, setSlots] = useState([]);
+  const [slotStartsAt, setSlotStartsAt] = useState({});
   const [customer, setCustomer] = useState(emptyCustomer);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [pendingPayment, setPendingPayment] = useState(null);
@@ -43,12 +36,7 @@ export default function BookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [confirmation, setConfirmation] = useState(false);
-  const today = useMemo(() => localDateString(new Date()), []);
-  const maxDate = useMemo(() => {
-    const limit = new Date();
-    limit.setDate(limit.getDate() + 30);
-    return localDateString(limit);
-  }, []);
+  const { today, maxDate } = bookingDateLimits();
 
   const service = services.find((item) => String(item.id) === serviceId);
   const barber = barbers.find((item) => String(item.id) === barberId);
@@ -69,6 +57,7 @@ export default function BookingPage() {
   useEffect(() => {
     setSelectedSlot('');
     setSlots([]);
+    setSlotStartsAt({});
     if (!serviceId || !barberId || !date || date < today || date > maxDate) {
       setLoadingSlots(false);
       return undefined;
@@ -77,7 +66,7 @@ export default function BookingPage() {
     setLoadingSlots(true);
     setError('');
     getAvailability(barberId, date)
-      .then((result) => { if (active) setSlots(result.availableSlots || []); })
+      .then((result) => { if (active) { setSlots(result.availableSlots || []); setSlotStartsAt(result.slotStartsAt || {}); } })
       .catch((requestError) => { if (active) setError(errorMessage(requestError)); })
       .finally(() => { if (active) setLoadingSlots(false); });
     return () => { active = false; };
@@ -95,10 +84,12 @@ export default function BookingPage() {
   async function refreshSlots() {
     if (!barberId || !date) return;
     setSelectedSlot('');
+    setSlotStartsAt({});
     setLoadingSlots(true);
     try {
       const result = await getAvailability(barberId, date);
       setSlots(result.availableSlots || []);
+      setSlotStartsAt(result.slotStartsAt || {});
     } catch (refreshError) {
       setError(errorMessage(refreshError));
     } finally {
@@ -122,7 +113,7 @@ export default function BookingPage() {
             },
             barberId: Number(barberId),
             serviceId: Number(serviceId),
-            startAt: `${date} ${selectedSlot}:00`,
+            startAt: bookingStartAt(date, selectedSlot, slotStartsAt),
             paymentMethod,
             notes: customer.notes.trim(),
           });
@@ -140,7 +131,7 @@ export default function BookingPage() {
           },
           barberId: Number(barberId),
           serviceId: Number(serviceId),
-          startAt: `${date} ${selectedSlot}:00`,
+          startAt: bookingStartAt(date, selectedSlot, slotStartsAt),
           paymentMethod,
           notes: customer.notes.trim(),
         });

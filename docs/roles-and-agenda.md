@@ -51,11 +51,11 @@ restablecimiento de contraseñas ni bajas desde la pantalla de usuarios.
 Los barberos ingresan a `/admin/agenda`. La fecha y hora se presentan explícitamente
 en `America/Argentina/Buenos_Aires`, sin depender de la zona del navegador.
 `GET /api/appointments?agendaDate=YYYY-MM-DD` filtra por ese día en Buenos Aires
-(UTC-03:00 para las fechas de la aplicación), con límite superior exclusivo.
+(mediante las reglas IANA de la zona), con límite superior exclusivo.
 No puede combinarse con `from` o `to`. Estos filtros existentes conservan su
 interpretación anterior. No se reescriben ni reinterpretan los instantes históricos
-guardados en la base; esta entrega no corrige la convención de carga de la reserva
-pública.
+guardados en la base. La reserva pública envía ahora el instante UTC explícito
+provisto por disponibilidad; ver [convención de horarios](reservation-timezone.md).
 
 La reserva pública, disponibilidad y endpoints de Mercado Pago conservan su flujo.
 No se implementan cobros manuales, estadísticas ni transiciones nuevas de estados.

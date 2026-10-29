@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Alert, Badge, Button, Card } from 'react-bootstrap';
 import { collectAppointment, completeAppointment, completeAndCollectAppointment, getAppointment, refreshAppointmentPayment } from '../services/api.js';
 import { formatPrice, paymentMethodLabels, statusLabels, statusVariants } from './adminUtils.js';
-import { formatAgendaDate, AGENDA_TIME_ZONE } from './agendaTime.js';
+import { formatAgendaDate, formatAgendaTime } from './agendaTime.js';
 import { appointmentWorkflow } from './appointmentWorkflow.js';
 import './agenda.css';
 
@@ -16,7 +16,7 @@ export function AppointmentPayment({ appointment }) {
 
 export function AppointmentCard({ appointment, onUpdated, statusControl, showDate = false }) {
   const charge = appointment.charge;
-  const time = new Intl.DateTimeFormat('es-AR', { timeZone: AGENDA_TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(appointment.startAt));
+  const time = formatAgendaTime(appointment.startAt);
   return <Card as="article" className="admin-card appointment-card"><Card.Body>
     <div className="appointment-card-heading">
       <time className="appointment-time" dateTime={appointment.startAt}>{time}</time>

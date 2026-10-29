@@ -36,3 +36,4 @@ Los nombres y precios cargados son datos ficticios para desarrollo; reemplazalos
 - [Roles, permisos y agenda individual](docs/roles-and-agenda.md)
 - [Finalización y cobros presenciales](docs/service-completion-and-charges.md)
 - [Dashboard financiero: cálculos y prueba manual](docs/financial-dashboard.md)
+- [Convención de fechas y horarios de reservas](docs/reservation-timezone.md)
