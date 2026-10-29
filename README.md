@@ -30,3 +30,9 @@ npm run dev:frontend
 Abrí <http://127.0.0.1:5173/>. Vite reenvía `/api` al puerto configurado en `PORT` (por defecto, `3000`). El flujo permite elegir servicio, barbero, fecha y horario, ingresar los datos del cliente y confirmar la reserva.
 
 Los nombres y precios cargados son datos ficticios para desarrollo; reemplazalos por la información de la barbería antes de publicar la aplicación.
+
+## Gestión de la barbería
+
+- [Roles, permisos y agenda individual](docs/roles-and-agenda.md)
+- [Finalización y cobros presenciales](docs/service-completion-and-charges.md)
+- [Dashboard financiero: cálculos y prueba manual](docs/financial-dashboard.md)

@@ -26,6 +26,7 @@ app.use('/api/auth', createAuthRouter({
 }));
 app.use('/api/services', servicesRouter);
 app.use('/api/users', require('./routes/users'));
+app.use('/api/reports', require('./routes/reports').createReportsRouter());
 app.use('/api/customers', customersRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/appointments', require('./routes/appointmentActions').createAppointmentActionsRouter());

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
-import { getAdminBarbers, getAppointments, updateAppointment } from '../services/api.js';
+import { getAdminBarbers, getAppointment, getAppointments, updateAppointment } from '../services/api.js';
 import { appointmentStatuses, statusLabels } from './adminUtils.js';
 import { AppointmentCard } from './AppointmentActions.jsx';
 import { agendaDateString } from './agendaTime.js';
 
 export default function AppointmentsPage() {
   const [barbers, setBarbers] = useState([]);
+  const [focusedId, setFocusedId] = useState(() => new URLSearchParams(window.location.search).get('appointmentId'));
   const [appointments, setAppointments] = useState([]);
   const [filters, setFilters] = useState(() => ({ date: agendaDateString(), barberId: '', status: '' }));
   const [loading, setLoading] = useState(true);
@@ -29,11 +30,11 @@ export default function AppointmentsPage() {
       ...(filters.barberId ? { barberId: filters.barberId } : {}),
       ...(filters.status ? { status: filters.status } : {}),
     };
-    getAppointments(query).then((items) => { if (active) setAppointments(items); })
+    (focusedId ? getAppointment(focusedId).then((item) => [item]) : getAppointments(query)).then((items) => { if (active) setAppointments(items); })
       .catch((requestError) => { if (active) setError(requestError.message || 'No pudimos cargar los turnos.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [filters]);
+  }, [filters, focusedId]);
 
   async function changeStatus(appointment, status) {
     if (status === appointment.status) return;
@@ -59,12 +60,13 @@ export default function AppointmentsPage() {
   }
 
   return <>
-    <div className="admin-filters mb-3">
+    {focusedId && <Alert variant="info">Turno #{focusedId} abierto desde el reporte. <Button variant="link" onClick={() => { setFocusedId(null); window.history.replaceState(null, '', '/admin/appointments'); }}>Volver a todos los turnos</Button></Alert>}
+    <fieldset disabled={Boolean(focusedId)} className="admin-filters mb-3">
       <Form.Group><Form.Label>Fecha</Form.Label><Form.Control type="date" value={filters.date} onChange={(event) => setFilters((current) => ({ ...current, date: event.target.value }))} /></Form.Group>
       <Form.Group><Form.Label>Barbero</Form.Label><Form.Select value={filters.barberId} onChange={(event) => setFilters((current) => ({ ...current, barberId: event.target.value }))}><option value="">Todos</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}{!barber.active ? ' (inactivo)' : ''}</option>)}</Form.Select></Form.Group>
       <Form.Group><Form.Label>Estado</Form.Label><Form.Select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}><option value="">Todos</option>{appointmentStatuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</Form.Select></Form.Group>
       <div className="admin-filter-count">{loading ? 'Actualizando…' : `${appointments.length} turnos`}</div>
-    </div>
+    </fieldset>
     {error && <Alert variant="warning" dismissible onClose={() => setError('')}>{error}</Alert>}
     <div>
       {loading ? <div className="admin-loading"><Spinner animation="border" role="status" /><span>Cargando turnos…</span></div> : appointments.length ? <>
