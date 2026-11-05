@@ -10,7 +10,7 @@ const availabilityRouter = require('./routes/availability');
 const { createMercadoPagoWebhookRouter } = require('./routes/mercadoPagoWebhook');
 const createAuthRouter = require('./routes/auth');
 const { createSessionMiddleware } = require('./middleware/session');
-const { sequelize } = require('./models');
+const { sequelize, Service, Barber } = require('./models');
 
 const app = express();
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
@@ -35,5 +35,18 @@ app.use('/api/availability', availabilityRouter);
 app.use('/api/barbers/:barberId/schedules', schedulesRouter);
 app.use('/api/barbers', barbersRouter);
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
+
+if (process.env.SERVE_FRONTEND === 'true') {
+  app.use(require('./middleware/publicFrontend').createPublicFrontend(
+    require('node:path').resolve(__dirname, '../..', 'frontend', 'dist'),
+    { loadCatalog: async () => {
+      const [services, barbers] = await Promise.all([
+        Service.findAll({ where: { active: true }, attributes: ['name', 'description', 'price'], order: [['name', 'ASC']] }),
+        Barber.findAll({ where: { active: true }, attributes: ['name', 'image'], order: [['name', 'ASC']] }),
+      ]);
+      return { services, barbers };
+    } },
+  ));
+}
 
 module.exports = app;

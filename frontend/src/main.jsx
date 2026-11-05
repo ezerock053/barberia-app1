@@ -4,4 +4,5 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './style.css';
 import App from './App.jsx';
 
+document.getElementById('seo-prerender')?.remove();
 createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);

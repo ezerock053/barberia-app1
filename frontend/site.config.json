@@ -1,0 +1,33 @@
+{
+  "environment": "development",
+  "indexable": false,
+  "isExample": true,
+  "name": "Barbería de desarrollo · DEMOSTRACIÓN",
+  "description": "Instalación de desarrollo con datos de ejemplo. No corresponde a una barbería real.",
+  "address": { "street": "Dirección de ejemplo", "locality": "Localidad de ejemplo", "province": "Provincia de ejemplo", "postalCode": "", "country": "AR" },
+  "phone": "",
+  "whatsapp": "",
+  "instagram": "",
+  "email": "",
+  "logo": "",
+  "publicUrl": "http://localhost:5173",
+  "texts": {
+    "tagline": "Estilo clásico, actitud propia.",
+    "homeEyebrow": "BARBERÍA · DEMOSTRACIÓN",
+    "homeTitle": "Tu estilo.",
+    "homeAccent": "Tu momento.",
+    "homeIntro": "Un buen corte cambia cómo te ves. Y cómo te sentís.",
+    "servicesHeading": "El cuidado que merecés",
+    "servicesIntro": "Un buen corte empieza con el servicio indicado.",
+    "barbersHeading": "Conocé al equipo",
+    "barbersIntro": "Personas apasionadas por el oficio y los buenos detalles.",
+    "contactIntro": "Esta instalación utiliza datos de demostración.",
+    "bookingIntro": "Elegí lo que necesitás y encontrá un horario para vos.",
+    "openingHours": "Horario comercial pendiente de configurar",
+    "bannerTitle": "Hacete un espacio.",
+    "seoHomeDescription": "Conocé la barbería, sus servicios y el equipo. Encontrá un estilo pensado para vos.",
+    "seoServicesDescription": "Explorá los servicios de barbería disponibles y encontrá el cuidado que buscás.",
+    "seoBarbersDescription": "Conocé a los barberos del equipo y elegí quién te acompañará en tu próximo corte.",
+    "seoContactDescription": "Encontrá la dirección y los medios de contacto de la barbería. Consultá horarios y escribinos."
+  }
+}

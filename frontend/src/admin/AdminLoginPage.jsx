@@ -31,7 +31,7 @@ export default function AdminLoginPage() {
       <Container className="admin-auth-container">
         <Card className="admin-auth-card">
           <Card.Body>
-            <a href="/#inicio" className="admin-brand admin-auth-brand"><span className="brand-mark">B.</span> Administración</a>
+            <a href="/" className="admin-brand admin-auth-brand"><span className="brand-mark">B.</span> Administración</a>
             <div className="eyebrow mt-4">ACCESO ADMINISTRATIVO</div>
             <h1>Ingresar</h1>
             <p className="admin-auth-copy">Usá tus credenciales de acceso para continuar.</p>

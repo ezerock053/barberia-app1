@@ -1,6 +1,12 @@
 :root { font-family: Inter, system-ui, sans-serif; color: #f5f1e9; background: #111210; font-synthesis: none; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; background: #111210; color: #f5f1e9; }
+.seo-prerender main { width: min(100% - 2rem, 1120px); margin: 0 auto; padding: clamp(2.5rem, 8vw, 5rem) 0; }
+.seo-prerender section + .row, .seo-prerender section + section { margin-top: 2.5rem; }
+.seo-prerender h1, .seo-prerender h2 { font-family: Georgia, 'Times New Roman', serif; }
+.seo-prerender h1 { font-size: clamp(2.8rem, 8vw, 5rem); }
+.seo-prerender h2 { font-size: clamp(1.8rem, 5vw, 3rem); }
+.seo-prerender p { max-width: 680px; color: #c3c0b8; }
 a { color: inherit; }
 .site-navbar { background: rgba(17,18,16,.96); border-bottom: 1px solid #2a2b27; padding: 1rem 0; }
 .navbar-brand { color: #f5f1e9 !important; font-size: .78rem; letter-spacing: .13em; font-weight: 700; }

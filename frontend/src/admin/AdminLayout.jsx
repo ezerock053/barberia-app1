@@ -39,7 +39,7 @@ export default function AdminLayout({ user, onLogout, logoutError }) {
       <header className="admin-topbar">
         <Container fluid className="d-flex align-items-center justify-content-between gap-3">
           <a href="/admin" className="admin-brand"><span className="brand-mark">B.</span> Administración</a>
-          <a href="/#inicio" className="admin-public-link">Ver sitio público ↗</a>
+          <a href="/" className="admin-public-link">Ver sitio público ↗</a>
           <Button variant="outline-warning" size="sm" onClick={onLogout}>Cerrar sesión</Button>
         </Container>
       </header>

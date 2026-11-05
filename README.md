@@ -38,3 +38,4 @@ Los nombres y precios cargados son datos ficticios para desarrollo; reemplazalos
 - [Dashboard financiero: cálculos y prueba manual](docs/financial-dashboard.md)
 - [Convención de fechas y horarios de reservas](docs/reservation-timezone.md)
 - [Mejoras UX: agenda, observaciones y reintentos](docs/ux-agenda-and-retries.md)
+- [Configuración por barbería, rutas públicas e indexación](docs/site-configuration-and-routing.md)

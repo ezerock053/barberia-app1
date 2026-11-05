@@ -1,3 +1,4 @@
+import { site } from '../config/site.js';
 import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Col, Container, Form, Row, Spinner } from 'react-bootstrap';
 import { ApiError, createAppointment, createMercadoPagoOrder, getAvailability, getBarbers, getServices } from '../services/api.js';
@@ -136,10 +137,10 @@ export default function BookingPage() {
     const paymentMessage = paymentMethod === 'cash'
       ? 'Abonás en efectivo en la barbería.'
       : 'Elegiste Mercado Pago. Te indicaremos cómo completar el pago próximamente.';
-    return <section className="page-section"><Container><Card className="booking-card confirmation-card mx-auto"><Card.Body className="text-center"><div className="confirmation-mark" aria-hidden="true">✓</div><div className="eyebrow">TE ESPERAMOS</div><h1 className="page-title">¡Turno reservado!</h1><p className="page-intro mx-auto">Tu reserva quedó registrada. {paymentMessage}</p><div className="confirmation-details text-start"><p><span>Servicio</span>{service?.name}</p><p><span>Barbero</span>{barber?.name}</p><p><span>Fecha</span>{formatDate(date)}</p><p><span>Hora</span>{selectedSlot}</p><p><span>Método de pago</span>{paymentMethod === 'cash' ? 'Efectivo' : 'Mercado Pago'}</p></div><Button variant="warning" href="#inicio" className="mt-3">Volver al inicio</Button></Card.Body></Card></Container></section>;
+    return <section className="page-section"><Container><Card className="booking-card confirmation-card mx-auto"><Card.Body className="text-center"><div className="confirmation-mark" aria-hidden="true">✓</div><div className="eyebrow">TE ESPERAMOS</div><h1 className="page-title">¡Turno reservado!</h1><p className="page-intro mx-auto">Tu reserva quedó registrada. {paymentMessage}</p><div className="confirmation-details text-start"><p><span>Servicio</span>{service?.name}</p><p><span>Barbero</span>{barber?.name}</p><p><span>Fecha</span>{formatDate(date)}</p><p><span>Hora</span>{selectedSlot}</p><p><span>Método de pago</span>{paymentMethod === 'cash' ? 'Efectivo' : 'Mercado Pago'}</p></div><Button variant="warning" href="/" className="mt-3">Volver al inicio</Button></Card.Body></Card></Container></section>;
   }
 
-  return <section className="page-section" id="reservar"><Container><div className="eyebrow">A TU MANERA</div><h1 className="page-title">Reservá tu turno</h1><p className="page-intro">Elegí lo que necesitás y encontrá un horario para vos.</p>
+  return <section className="page-section" id="reservar"><Container><div className="eyebrow">A TU MANERA</div><h1 className="page-title">Reservá tu turno</h1><p className="page-intro">{site.texts.bookingIntro}</p>
     <div className="booking-steps" aria-label="Progreso de reserva">{steps.map((label, index) => <div key={label} className={`booking-step ${step === index + 1 ? 'active' : ''} ${step > index + 1 ? 'complete' : ''}`}><span>{step > index + 1 ? '✓' : index + 1}</span><small>{label}</small></div>)}</div>
     {error && <Alert variant="warning" dismissible onClose={() => setError('')}>{error}</Alert>}
     <Card className="booking-card"><Card.Body>
