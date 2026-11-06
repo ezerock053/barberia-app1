@@ -14,6 +14,13 @@ async function run() {
   await navigate('/', 'Tu estilo.');
   const home = documentInFrame().body.textContent;
   for (const configured of ['Negocio de integración', 'IDENTIDAD CONFIGURADA', 'Presentación configurada', 'Servicios personalizados', 'Equipo personalizado', 'Lema personalizado']) check(home.includes(configured), `Texto sin configurar: ${configured}`);
+  const homeServices = documentInFrame().querySelector('#servicios-lista');
+  const homeBarbers = documentInFrame().querySelector('#barberos-lista');
+  check(homeServices?.textContent.includes('Servicio inicial SSR'), `La portada no conserva el catálogo inicial del HTML: ${home}`);
+  check(homeServices?.textContent.includes('$2.345'), 'El precio inicial del HTML no llega a React');
+  check(homeBarbers?.textContent.includes('Barbero inicial SSR'), 'La portada no conserva los barberos iniciales del HTML');
+  let catalogRequests = await (await fetch('/__catalog_counts')).json();
+  check(catalogRequests.services === 0 && catalogRequests.barbers === 0, 'La portada vuelve a consultar un catálogo ya presente en el HTML');
   check(documentInFrame().querySelector('.navbar-brand').textContent.includes('Negocio de integración'), 'Navbar no usa nombre configurado');
   check(documentInFrame().querySelector('footer').textContent.includes('Negocio de integración'), 'Footer no usa nombre configurado');
   const navbar = documentInFrame().querySelector('.navbar-toggler');
@@ -25,13 +32,22 @@ async function run() {
   await waitFor(() => frame.contentWindow.location.pathname === '/' && documentInFrame().querySelector('h1')?.textContent.includes('Tu estilo.'), 'atrás');
   frame.contentWindow.history.forward();
   await waitFor(() => frame.contentWindow.location.pathname === '/servicios' && documentInFrame().querySelector('h1')?.textContent === 'Servicios', 'adelante');
+  check(documentInFrame().querySelector('.service-card').textContent.includes('Servicio inicial SSR'), 'Servicios pierde el catálogo al montar React');
+  catalogRequests = await (await fetch('/__catalog_counts')).json();
+  check(catalogRequests.services === 0, 'Servicios consulta la API aunque ya recibió el catálogo inicial');
   await navigate('/contacto', 'Contacto');
   check(documentInFrame().querySelector('main').textContent.includes('Dirección de ejemplo'), 'Contacto no usa configuración');
   await new Promise((resolve) => { frame.addEventListener('load', resolve, { once: true }); frame.contentWindow.location.reload(); });
   await waitFor(() => documentInFrame().querySelector('h1')?.textContent === 'Contacto', 'recarga directa');
   await navigate('/barberos', 'Nuestros barberos');
+  check(documentInFrame().querySelector('.barber-card').textContent.includes('Barbero inicial SSR'), 'Barberos pierde el catálogo al montar React');
+  catalogRequests = await (await fetch('/__catalog_counts')).json();
+  check(catalogRequests.barbers === 0, 'Barberos consulta la API aunque ya recibió el catálogo inicial');
   await navigate('/reservar', 'Reservá tu turno');
   check(documentInFrame().querySelector('.page-intro').textContent === 'Reserva personalizada', 'Reserva no usa texto configurado');
+  await waitFor(() => documentInFrame().querySelector('#service-1'), 'catálogo de reserva vía API');
+  catalogRequests = await (await fetch('/__catalog_counts')).json();
+  check(catalogRequests.services > 0 && catalogRequests.barbers > 0, 'La reserva dejó de consultar la API cuando no tiene catálogo inicial');
   const headers = await fetch('/reservar');
   check(headers.headers.get('x-robots-tag') === 'noindex, follow', 'Reserva sin noindex HTTP');
   await navigate('/?origen=antiguo#servicios', 'Servicios');
@@ -45,6 +61,11 @@ async function run() {
   check(documentInFrame().querySelector('meta[name=robots]').content === 'noindex, follow', 'Login sin noindex inicial');
   await navigate('/admin/agenda', 'Ingresar');
   await waitFor(() => frame.contentWindow.location.pathname === '/admin/login', 'protección administrativa');
+  await navigate('/servicios?malformedCatalog=1', 'Servicios');
+  await waitFor(() => documentInFrame().querySelector('.service-card')?.textContent.includes('Corte API'), 'fallback API para JSON incompleto');
+  check(!documentInFrame().querySelector('.service-card').textContent.includes('Servicio inicial SSR'), 'invalid catalog is not rendered partially');
+  catalogRequests = await (await fetch('/__catalog_counts')).json();
+  check(catalogRequests.services > 0, 'valid but incomplete JSON activates API fallback');
   document.getElementById('result').textContent = JSON.stringify({ passed: true });
 }
 run().catch((error) => { document.getElementById('result').textContent = JSON.stringify({ passed: false, error: error.message }); });

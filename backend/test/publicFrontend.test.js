@@ -41,23 +41,55 @@ test('servidor entrega rutas públicas directas con HTML y política inicial cor
 test('catálogo activo se inserta por solicitud en el HTML inicial y se escapa como texto seguro', async (t) => {
   let revision = 1;
   const base = await harness(t, true, async () => ({
-    services: [{ name: 'Corte <script>nuevo</script>', description: 'Precio vigente & claro', price: `${revision++}000` }],
-    barbers: [{ name: 'Ana <Barbera>', image: 'javascript:alert(1)' }],
+    services: [{ id: revision, name: `Corte <script>nuevo</script> ${revision}`, description: 'Precio vigente & claro', price: `${revision++}000` }],
+    barbers: [{ id: revision, name: 'Ana </script><script>alert(1)</script>', image: 'javascript:alert(1)' }],
   }));
   const first = await (await fetch(base + '/servicios')).text();
   assert.match(first, /Corte &lt;script&gt;nuevo&lt;\/script&gt;/);
   assert.match(first, /Precio vigente &amp; claro/);
   assert.match(first, /\$1\.000/);
   assert.doesNotMatch(first, /<script>nuevo/);
+  const initial = JSON.parse(first.match(/<script id="seo-catalog" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+  assert.deepEqual(initial.services[0], { id: 1, name: 'Corte <script>nuevo</script> 1', description: 'Precio vigente & claro', price: '1000' });
+  assert.equal(initial.barbers[0].name, 'Ana </script><script>alert(1)</script>');
+  assert.equal(initial.barbers[0].image, null, 'El origen de imagen inseguro no llega al estado inicial de React');
+  assert.doesNotMatch(first, /<script>alert\(1\)<\/script>/, 'El nombre no puede cerrar el script JSON ni ejecutar HTML');
   const second = await (await fetch(base + '/servicios')).text();
   assert.match(second, /\$2\.000/, 'cada respuesta consulta un catálogo actualizado');
+  const updated = JSON.parse(second.match(/<script id="seo-catalog" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+  assert.equal(updated.services[0].id, 2);
+  assert.equal(updated.services[0].name, 'Corte <script>nuevo</script> 2');
+  assert.equal(updated.services[0].price, '2000', 'la nueva solicitud incluye el precio actual');
   const barbers = await (await fetch(base + '/barberos')).text();
-  assert.match(barbers, /Ana &lt;Barbera&gt;/);
+  assert.match(barbers, /Ana &lt;\/script&gt;&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(barbers, /src="javascript:/);
   assert.match(barbers, /Retrato no disponible/);
+  const barberCatalog = JSON.parse(barbers.match(/<script id="seo-catalog" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+  assert.equal(barberCatalog.barbers[0].id, 4);
+  assert.equal(barberCatalog.barbers[0].name, 'Ana </script><script>alert(1)</script>');
+  const updatedBarbers = await (await fetch(base + '/barberos')).text();
+  const nextBarberCatalog = JSON.parse(updatedBarbers.match(/<script id="seo-catalog" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+  assert.equal(nextBarberCatalog.barbers[0].id, 5, 'una nueva solicitud entrega la versión actual del equipo');
   const home = await (await fetch(base + '/')).text();
   assert.match(home, /id="seo-services-list"/);
   assert.match(home, /id="seo-barbers-list"/);
+  assert.equal((home.match(/id="seo-catalog"/g) || []).length, 1);
+});
+test('serialización conserva comillas, barras, saltos, separadores Unicode y texto de cierre script', async (t) => {
+  const special = `single ' and double " quote, slash \\ and newline\nseparator\u2028middle\u2029end </script><script>alert(1)</script>`;
+  const base = await harness(t, true, async () => ({
+    services: [{ id: 1, name: special, description: special, price: '2500.00' }],
+    barbers: [{ id: 2, name: special, image: '/uploads/photo.webp' }],
+  }));
+  const html = await (await fetch(base + '/servicios')).text();
+  const block = html.match(/<script id="seo-catalog" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(block, 'el JSON permanece dentro de su elemento script');
+  assert.doesNotMatch(block, /[<>&\u2028\u2029]/, 'los caracteres significativos no quedan crudos en el HTML');
+  const catalog = JSON.parse(block);
+  assert.equal(catalog.services[0].name, special);
+  assert.equal(catalog.services[0].description, special);
+  assert.equal(catalog.barbers[0].name, special);
+  assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/, 'texto de catálogo no crea un script ejecutable');
 });
 test('reserva y todas las rutas administrativas reciben noindex inicial aunque el negocio sea indexable', async (t) => {
   const base = await harness(t, true);

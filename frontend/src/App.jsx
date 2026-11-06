@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import SiteNavbar from './components/SiteNavbar.jsx';
 import SiteFooter from './components/SiteFooter.jsx';
 import HomePage from './pages/HomePage.jsx';
@@ -10,12 +10,13 @@ import AdminGate from './admin/AdminGate.jsx';
 import { site } from './config/site.js';
 import { isAdminPath, legacyDestination, normalizePath, routePolicy } from './config/routes.js';
 const pages = { '/': HomePage, '/servicios': ServicesPage, '/barberos': BarbersPage, '/reservar': BookingPage, '/contacto': ContactPage };
-export default function App() {
+export default function App({ initialCatalog }) {
+ useLayoutEffect(() => { document.getElementById('seo-prerender')?.remove(); }, []);
  if (isAdminPath(window.location.pathname)) return <AdminGate />;
- return <PublicApp />;
+ return <PublicApp initialCatalog={initialCatalog} />;
 }
 
-function PublicApp() {
+function PublicApp({ initialCatalog }) {
  const [redirecting, setRedirecting] = useState(false);
  const path = normalizePath(window.location.pathname);
  useEffect(() => {
@@ -44,5 +45,6 @@ function PublicApp() {
    } else canonical?.remove();
  }, [path]);
  const Page = pages[path];
- return <><SiteNavbar /><main>{redirecting ? <p className="admin-empty" role="status">Abriendo página…</p> : Page ? <Page /> : <section className="page-section"><div className="container"><h1>Página no encontrada</h1><p>La dirección solicitada no existe.</p><a href="/">Volver al inicio</a></div></section>}</main><SiteFooter /></>;
+ const catalogPage = path === '/' || path === '/servicios' || path === '/barberos';
+ return <><SiteNavbar /><main>{redirecting ? <p className="admin-empty" role="status">Abriendo página…</p> : Page ? <Page initialCatalog={catalogPage ? initialCatalog : null} /> : <section className="page-section"><div className="container"><h1>Página no encontrada</h1><p>La dirección solicitada no existe.</p><a href="/">Volver al inicio</a></div></section>}</main><SiteFooter /></>;
 }

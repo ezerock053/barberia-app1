@@ -41,8 +41,8 @@ if (process.env.SERVE_FRONTEND === 'true') {
     require('node:path').resolve(__dirname, '../..', 'frontend', 'dist'),
     { loadCatalog: async () => {
       const [services, barbers] = await Promise.all([
-        Service.findAll({ where: { active: true }, attributes: ['name', 'description', 'price'], order: [['name', 'ASC']] }),
-        Barber.findAll({ where: { active: true }, attributes: ['name', 'image'], order: [['name', 'ASC']] }),
+        Service.findAll({ where: { active: true }, attributes: ['id', 'name', 'description', 'price'], order: [['name', 'ASC']] }),
+        Barber.findAll({ where: { active: true }, attributes: ['id', 'name', 'image'], order: [['name', 'ASC']] }),
       ]);
       return { services, barbers };
     } },
