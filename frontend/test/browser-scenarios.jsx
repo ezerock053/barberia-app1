@@ -25,7 +25,8 @@ const text = () => host.textContent;
 const button = (label) => [...host.querySelectorAll('button')].find((element) => element.textContent.trim() === label);
 async function click(label) { await waitFor(() => button(label) && !button(label).disabled, label); button(label).click(); await pause(); }
 function change(element, value) {
-  const prototype = element.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  const prototype = element.tagName === 'SELECT' ? HTMLSelectElement.prototype
+    : element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
   element.dispatchEvent(new Event('input', { bubbles: true }));
   element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -113,8 +114,36 @@ async function run() {
     };
     await mount(BookingPage);
     await waitFor(() => host.querySelector('#service-1'), 'servicios');
+    const progress = host.querySelector('ol.booking-steps');
+    const progressItems = [...(progress?.children || [])];
+    check(progress?.getAttribute('aria-label') === 'Progreso de reserva' && progressItems.length === 5, 'El progreso no expone una lista ordenada de cinco pasos');
+    const stepNames = ['Servicio', 'Barbero', 'Fecha y hora', 'Tus datos', 'Confirmación'];
+    progressItems.forEach((item, index) => {
+      const screenReaderLabel = item.querySelector('.visually-hidden');
+      check(screenReaderLabel?.textContent.includes(stepNames[index]), `El nombre del paso ${index + 1} no está disponible en móvil`);
+      check(item.querySelector('small')?.getAttribute('aria-hidden') === 'true'
+        && item.querySelector(':scope > span')?.getAttribute('aria-hidden') === 'true', 'El indicador visual duplica el anuncio accesible');
+    });
+    check(progressItems.filter((item) => item.getAttribute('aria-current') === 'step').length === 1
+      && progressItems[0].getAttribute('aria-current') === 'step', 'El paso inicial no está marcado como actual');
+    check(window.getComputedStyle(progressItems[0].querySelector('small')).display === 'none', 'El diseño móvil debería ocultar las etiquetas visuales');
+    check(document.activeElement !== host.querySelector('.booking-step-title'), 'El foco no debe moverse al montar la reserva');
     host.querySelector('#service-1').click(); await click('Continuar');
+    await waitFor(() => document.activeElement === host.querySelector('.booking-step-title'), 'foco al título del paso 2');
+    check(progressItems[1].getAttribute('aria-current') === 'step'
+      && progressItems[0].querySelector('.visually-hidden').textContent.includes('paso anterior completado')
+      && progressItems[2].querySelector('.visually-hidden').textContent.includes('paso siguiente'), 'No se anuncia el estado anterior, actual y siguiente');
     host.querySelector('#barber-1').click(); await click('Continuar');
+    await waitFor(() => document.activeElement === host.querySelector('.booking-step-title'), 'foco al título del paso 3');
+    await click('Atrás');
+    await waitFor(() => document.activeElement === host.querySelector('.booking-step-title'), 'foco al título al retroceder');
+    check(progressItems[1].getAttribute('aria-current') === 'step', 'Atrás no actualiza el paso actual');
+    await click('Continuar');
+    await waitFor(() => document.activeElement === host.querySelector('.booking-step-title'), 'foco al volver al paso 3');
+    const availabilityGroup = host.querySelector('.availability');
+    check(availabilityGroup?.getAttribute('role') === 'group'
+      && availabilityGroup.getAttribute('aria-label') === 'Horarios disponibles'
+      && !availabilityGroup.querySelector('label'), 'Horarios disponibles usa una etiqueta sin control asociado');
     check(text().includes('al menos dos horas'), 'Falta anticipación mínima');
     change(host.querySelector('input[type=date]'), '2026-10-29');
     await waitFor(() => text().includes('No se pudieron cargar los horarios'), 'error disponibilidad');
@@ -132,6 +161,32 @@ async function run() {
     check(!button('10:00') && Boolean(button('11:00')), 'Se usó disponibilidad de la fecha anterior');
     await click('11:00');
     check(!button('Continuar').disabled, 'No permite continuar con el horario vigente'); noOverflow();
+    await click('Continuar');
+    await waitFor(() => document.activeElement === host.querySelector('.booking-step-title'), 'foco al título del paso 4');
+    const customerFields = [
+      ['booking-customer-name', 'Nombre'], ['booking-customer-phone', 'Tel'],
+      ['booking-customer-email', 'Email'], ['booking-customer-notes', 'Observaciones'],
+    ];
+    for (const [id, labelText] of customerFields) {
+      const control = host.querySelector(`#${id}`);
+      const label = [...host.querySelectorAll('label')].find((candidate) => candidate.htmlFor === id);
+      check(control && label && label.control === control && label.textContent.includes(labelText), `Etiqueta ${labelText} no está asociada al control ${id}`);
+    }
+    const name = host.querySelector('#booking-customer-name');
+    const phone = host.querySelector('#booking-customer-phone');
+    const email = host.querySelector('#booking-customer-email');
+    const notes = host.querySelector('#booking-customer-notes');
+    check(name.required && name.maxLength === 255 && name.autocomplete === 'name', 'Cambió la validación del nombre');
+    check(phone.required && phone.type === 'tel' && phone.maxLength === 50, 'Cambió la validación del teléfono');
+    check(email.required && email.type === 'email' && email.maxLength === 255, 'Cambió la validación del email');
+    check(notes.tagName === 'TEXTAREA' && notes.maxLength === 255, 'Cambió la validación de observaciones');
+    change(name, 'Cliente de prueba'); change(phone, '1122334455');
+    change(email, 'cliente@example.com'); change(notes, 'Sin preferencias adicionales');
+    await click('Ver resumen');
+    await waitFor(() => document.activeElement === host.querySelector('.booking-step-title'), 'foco al título del resumen');
+    check(text().includes('Cliente de prueba') && text().includes('1122334455')
+      && text().includes('cliente@example.com') && text().includes('Sin preferencias adicionales'), 'Los datos no llegan al resumen de reserva');
+    noOverflow();
   });
   await scenario('Reserva: reintenta la carga inicial de servicios y barberos', async () => {
     let fail = true;
