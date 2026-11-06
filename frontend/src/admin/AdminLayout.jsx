@@ -1,12 +1,15 @@
+import { lazy } from 'react';
 import { Alert, Button, Container, Nav } from 'react-bootstrap';
-import AdminDashboard from './DashboardPage.jsx';
-import AppointmentsPage from './AppointmentsPage.jsx';
-import ServicesPage from './ServicesPage.jsx';
-import BarbersPage from './BarbersPage.jsx';
-import SchedulesPage from './SchedulesPage.jsx';
-import ChangePasswordPage from './ChangePasswordPage.jsx';
-import MyAgendaPage from './MyAgendaPage.jsx';
-import UsersPage from './UsersPage.jsx';
+import { LazyModuleBoundary, LazyModuleSuspense } from '../components/ModuleLoadBoundary.jsx';
+
+const AdminDashboard = lazy(() => import('./DashboardPage.jsx'));
+const AppointmentsPage = lazy(() => import('./AppointmentsPage.jsx'));
+const ServicesPage = lazy(() => import('./ServicesPage.jsx'));
+const BarbersPage = lazy(() => import('./BarbersPage.jsx'));
+const SchedulesPage = lazy(() => import('./SchedulesPage.jsx'));
+const ChangePasswordPage = lazy(() => import('./ChangePasswordPage.jsx'));
+const MyAgendaPage = lazy(() => import('./MyAgendaPage.jsx'));
+const UsersPage = lazy(() => import('./UsersPage.jsx'));
 
 const sections = [
   { path: '/admin', label: 'Resumen' },
@@ -63,7 +66,9 @@ export default function AdminLayout({ user, onLogout, logoutError }) {
               <div className="eyebrow">GESTIÓN DE BARBERÍA</div>
               <h1>{title}</h1>
             </div>
-            <Page />
+            <LazyModuleBoundary>
+              <LazyModuleSuspense label={`Cargando ${title.toLowerCase()}…`}><Page /></LazyModuleSuspense>
+            </LazyModuleBoundary>
           </main>
         </div>
       </Container>

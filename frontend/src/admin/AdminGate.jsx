@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Container, Spinner } from 'react-bootstrap';
-import AdminLayout from './AdminLayout.jsx';
-import AdminLoginPage from './AdminLoginPage.jsx';
+import { LazyModuleSuspense } from '../components/ModuleLoadBoundary.jsx';
 import { adminLoginHref, currentAdminDestination } from './adminNavigation.js';
 import { getAdminSession, logoutAdmin, setAdminUnauthorizedHandler } from '../services/api.js';
+
+const AdminLayout = lazy(() => import('./AdminLayout.jsx'));
+const AdminLoginPage = lazy(() => import('./AdminLoginPage.jsx'));
 
 function AdminSessionCheck() {
   const [status, setStatus] = useState('checking');
@@ -67,11 +69,13 @@ function AdminSessionCheck() {
   if (status === 'error') {
     return <main className="admin-auth-shell"><Container className="admin-auth-error"><Alert variant="warning">{error}</Alert><Button variant="outline-warning" onClick={() => window.location.reload()}>Intentar nuevamente</Button></Container></main>;
   }
-  return <AdminLayout user={user} onLogout={handleLogout} logoutError={logoutError} />;
+  return <LazyModuleSuspense fullPage label="Cargando el panel…">
+    <AdminLayout user={user} onLogout={handleLogout} logoutError={logoutError} />
+  </LazyModuleSuspense>;
 }
 
 export default function AdminGate() {
   const pathname = window.location.pathname.replace(/\/$/, '') || '/admin';
-  if (pathname === '/admin/login') return <AdminLoginPage />;
+  if (pathname === '/admin/login') return <LazyModuleSuspense fullPage label="Cargando el acceso…"><AdminLoginPage /></LazyModuleSuspense>;
   return <AdminSessionCheck />;
 }
