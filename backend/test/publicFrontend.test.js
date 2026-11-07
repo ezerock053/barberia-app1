@@ -75,6 +75,35 @@ test('catálogo activo se inserta por solicitud en el HTML inicial y se escapa c
   assert.match(home, /id="seo-barbers-list"/);
   assert.equal((home.match(/id="seo-catalog"/g) || []).length, 1);
 });
+test('HTML inicial difiere las fotos no prioritarias y prioriza solo el primer retrato en /barberos', async (t) => {
+  const base = await harness(t, true, async () => ({ services: [], barbers: [
+    { id: 1, name: 'Ana & Equipo', image: '/uploads/ana.webp' },
+    { id: 2, name: 'Bruno', image: 'https://cdn.example.test/bruno.webp' },
+    { id: 3, name: 'Caro', image: '/uploads/caro.webp' },
+  ] }));
+  const home = await (await fetch(base + '/')).text();
+  const homeImages = [...home.matchAll(/<img class="card-img-top"[^>]*>/g)].map(([image]) => image);
+  assert.equal(homeImages.length, 3);
+  for (const image of homeImages) {
+    assert.match(image, /loading="lazy"/);
+    assert.match(image, /decoding="async"/);
+    assert.match(image, /width="640" height="480"/);
+    assert.doesNotMatch(image, /fetchpriority=/);
+  }
+  assert.match(homeImages[0], /alt="Ana &amp; Equipo"/);
+
+  const team = await (await fetch(base + '/barberos')).text();
+  const teamImages = [...team.matchAll(/<img class="card-img-top"[^>]*>/g)].map(([image]) => image);
+  assert.equal(teamImages.length, 3);
+  assert.match(teamImages[0], /loading="eager"/);
+  assert.match(teamImages[0], /fetchpriority="high"/);
+  assert.match(teamImages[0], /decoding="async"/);
+  assert.match(teamImages[0], /width="640" height="480"/);
+  for (const image of teamImages.slice(1)) {
+    assert.match(image, /loading="lazy"/);
+    assert.doesNotMatch(image, /fetchpriority=/);
+  }
+});
 test('serialización conserva comillas, barras, saltos, separadores Unicode y texto de cierre script', async (t) => {
   const special = `single ' and double " quote, slash \\ and newline\nseparator\u2028middle\u2029end </script><script>alert(1)</script>`;
   const base = await harness(t, true, async () => ({

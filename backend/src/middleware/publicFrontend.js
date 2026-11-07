@@ -28,13 +28,14 @@ function safeImage(value) {
   } catch { return null; }
 }
 
-function renderBarbers(barbers = []) {
+function renderBarbers(barbers = [], { prioritizeFirstImage = false } = {}) {
   if (!barbers.length) return '<p class="muted-copy">Pronto vas a conocer a nuestro equipo.</p>';
-  return barbers.map((barber) => {
+  return barbers.map((barber, index) => {
     const name = escapeHtml(barber.name);
     const image = safeImage(barber.image);
+    const priority = prioritizeFirstImage && index === 0;
     const portrait = image
-      ? `<img class="card-img-top" src="${escapeHtml(image)}" alt="${name}" />`
+      ? `<img class="card-img-top" src="${escapeHtml(image)}" alt="${name}" width="640" height="480" loading="${priority ? 'eager' : 'lazy'}" decoding="async"${priority ? ' fetchpriority="high"' : ''} />`
       : `<div class="barber-placeholder" aria-label="Retrato no disponible"><span>${escapeHtml(name.charAt(0).toUpperCase() || 'B')}</span></div>`;
     return `<div class="col-sm-6 col-lg-4"><div class="card barber-card h-100">${portrait}<div class="card-body"><div class="eyebrow">BARBERO</div><div class="card-title h5">${name}</div></div></div></div>`;
   }).join('');
@@ -56,7 +57,7 @@ function addCatalogToHtml(html, pathname, catalog) {
   const pageServices = path === '/' ? services.slice(0, 3) : services;
   const pageBarbers = path === '/' ? barbers.slice(0, 3) : barbers;
   if (path === '/' || path === '/servicios') html = html.replace('<div id="seo-services-list" class="row g-3"></div>', `<div id="seo-services-list" class="row g-3">${renderServices(pageServices)}</div>`);
-  if (path === '/' || path === '/barberos') html = html.replace('<div id="seo-barbers-list" class="row g-3"></div>', `<div id="seo-barbers-list" class="row g-3">${renderBarbers(pageBarbers)}</div>`);
+  if (path === '/' || path === '/barberos') html = html.replace('<div id="seo-barbers-list" class="row g-3"></div>', `<div id="seo-barbers-list" class="row g-3">${renderBarbers(pageBarbers, { prioritizeFirstImage: path === '/barberos' })}</div>`);
   const initialCatalog = {
     services: pageServices.map((service) => ({
       id: service.id, name: String(service.name ?? ''), description: String(service.description ?? ''), price: service.price,

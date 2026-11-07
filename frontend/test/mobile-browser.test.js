@@ -37,7 +37,7 @@ for (const width of [390, 360]) {
         await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
       }
     });
-    const child = spawn(browser, ['--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+    const child = spawn(browser, ['--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--force-prefers-reduced-motion=reduce',
       `--user-data-dir=${profile}`, `--window-size=${width},844`, '--dump-dom', '--virtual-time-budget=12000',
       `http://127.0.0.1:${server.address().port}/`], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     let html = '';
@@ -51,6 +51,6 @@ for (const width of [390, 360]) {
     const report = JSON.parse(decoded);
     assert.equal(report.passed, true, `${report.error || ''} (completados: ${report.scenarios.join('; ')})`);
     assert.equal(report.viewport, width, 'El viewport no corresponde al ancho móvil solicitado');
-    assert.equal(report.scenarios.length, 5);
+    assert.equal(report.scenarios.length, 6);
   });
 }

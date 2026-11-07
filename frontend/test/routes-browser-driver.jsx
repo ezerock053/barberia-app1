@@ -19,6 +19,9 @@ async function run() {
   check(homeServices?.textContent.includes('Servicio inicial SSR'), `La portada no conserva el catálogo inicial del HTML: ${home}`);
   check(homeServices?.textContent.includes('$2.345'), 'El precio inicial del HTML no llega a React');
   check(homeBarbers?.textContent.includes('Barbero inicial SSR'), 'La portada no conserva los barberos iniciales del HTML');
+  const homePortrait = homeBarbers?.querySelector('img');
+  check(homePortrait?.loading === 'lazy' && homePortrait.decoding === 'async', 'El retrato de portada no usa carga diferida y decodificación asíncrona');
+  check(homePortrait.getAttribute('width') === '640' && homePortrait.getAttribute('height') === '480', 'El retrato de portada no reserva dimensiones');
   let catalogRequests = await (await fetch('/__catalog_counts')).json();
   check(catalogRequests.services === 0 && catalogRequests.barbers === 0, 'La portada vuelve a consultar un catálogo ya presente en el HTML');
   check(documentInFrame().querySelector('.navbar-brand').textContent.includes('Negocio de integración'), 'Navbar no usa nombre configurado');
@@ -41,11 +44,23 @@ async function run() {
   await waitFor(() => documentInFrame().querySelector('h1')?.textContent === 'Contacto', 'recarga directa');
   await navigate('/barberos', 'Nuestros barberos');
   check(documentInFrame().querySelector('.barber-card').textContent.includes('Barbero inicial SSR'), 'Barberos pierde el catálogo al montar React');
+  const firstPublicPortrait = documentInFrame().querySelector('.barber-card img');
+  check(firstPublicPortrait?.loading === 'eager' && firstPublicPortrait.fetchPriority === 'high', 'La primera foto visible del equipo no es prioritaria');
+  check(firstPublicPortrait.decoding === 'async' && firstPublicPortrait.getAttribute('width') === '640' && firstPublicPortrait.getAttribute('height') === '480',
+    'La primera foto del equipo no tiene decodificación y dimensiones explícitas');
+  check(firstPublicPortrait.alt === 'Barbero inicial SSR', 'Se perdió el texto alternativo del retrato');
   catalogRequests = await (await fetch('/__catalog_counts')).json();
   check(catalogRequests.barbers === 0, 'Barberos consulta la API aunque ya recibió el catálogo inicial');
   await navigate('/reservar', 'Reservá tu turno');
   check(documentInFrame().querySelector('.page-intro').textContent === 'Reserva personalizada', 'Reserva no usa texto configurado');
   await waitFor(() => documentInFrame().querySelector('#service-1'), 'catálogo de reserva vía API');
+  documentInFrame().querySelector('#service-1').click();
+  await waitFor(() => !documentInFrame().querySelector('button.btn-warning')?.disabled, 'selección de servicio');
+  documentInFrame().querySelector('button.btn-warning').click();
+  await waitFor(() => documentInFrame().querySelector('#barber-1'), 'paso de selección de barbero');
+  const bookingPortrait = documentInFrame().querySelector('.barber-choice-avatar img');
+  check(bookingPortrait?.loading === 'lazy' && bookingPortrait.decoding === 'async', 'El retrato de reserva no se difiere');
+  check(bookingPortrait.getAttribute('width') === '80' && bookingPortrait.getAttribute('height') === '80' && bookingPortrait.alt === '', 'El avatar de reserva no reserva su espacio o perdió su semántica decorativa');
   catalogRequests = await (await fetch('/__catalog_counts')).json();
   check(catalogRequests.services > 0 && catalogRequests.barbers > 0, 'La reserva dejó de consultar la API cuando no tiene catálogo inicial');
   const headers = await fetch('/reservar');

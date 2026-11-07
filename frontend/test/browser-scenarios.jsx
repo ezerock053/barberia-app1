@@ -46,6 +46,13 @@ function publish(result) {
 }
 async function scenario(name, run) { await run(); results.push(name); }
 async function run() {
+  await scenario('Movimiento reducido mantiene el contenido y evita desplazamiento suave', async () => {
+    check(window.matchMedia('(prefers-reduced-motion: reduce)').matches, 'El navegador no está simulando movimiento reducido');
+    check(getComputedStyle(document.documentElement).scrollBehavior === 'auto', 'El desplazamiento suave no se desactivó');
+    const choice = document.createElement('div'); choice.className = 'choice-card'; document.body.append(choice);
+    check(parseFloat(getComputedStyle(choice).transitionDuration) <= 0.00001, 'La transición decorativa sigue activa');
+    choice.remove(); noOverflow();
+  });
   await scenario('Agenda: actualizar, error, reintento, próximo y observaciones seguras', async () => {
     let calls = 0;
     globalThis.fetch = async () => {

@@ -24,25 +24,29 @@ test('navegador: rutas directas, recarga, atrás/adelante, hashes antiguos, 404 
       const pathname = requestUrl.pathname;
       if (!['/', '/servicios', '/barberos'].includes(pathname)) return html;
       const catalog = { services: [{ id: 31, name: 'Servicio inicial SSR', description: 'Incluido en el HTML', price: '2345.00' }],
-        barbers: [{ id: 41, name: 'Barbero inicial SSR', image: null }] };
+        barbers: [{ id: 41, name: 'Barbero inicial SSR', image: '/test-barber.svg' }] };
       const json = requestUrl.searchParams.has('malformedCatalog')
         ? '{"services":[{"id":31}],"barbers":[]}'
         : JSON.stringify(catalog).replace(/</g, '\\u003c');
       const script = `<script id="seo-catalog" type="application/json">${json}</script>`;
       html = html.replace('<div id="seo-services-list" class="row g-3"></div>', '<div id="seo-services-list" class="row g-3"><div class="col-md-6 col-lg-4"><div class="card service-card"><div class="card-body"><div class="card-title h5">Servicio inicial SSR</div><div class="service-price">$2.345</div></div></div></div></div>');
-      html = html.replace('<div id="seo-barbers-list" class="row g-3"></div>', '<div id="seo-barbers-list" class="row g-3"><div class="col-sm-6 col-lg-4"><div class="card barber-card"><div class="barber-placeholder"><span>B</span></div><div class="card-body"><div class="card-title h5">Barbero inicial SSR</div></div></div></div></div>');
+      const loading = pathname === '/barberos' ? 'eager' : 'lazy';
+      const priority = pathname === '/barberos' ? ' fetchpriority="high"' : '';
+      const portrait = `<img class="card-img-top" src="/test-barber.svg" alt="Barbero inicial SSR" width="640" height="480" loading="${loading}" decoding="async"${priority}>`;
+      html = html.replace('<div id="seo-barbers-list" class="row g-3"></div>', `<div id="seo-barbers-list" class="row g-3"><div class="col-sm-6 col-lg-4"><div class="card barber-card">${portrait}<div class="card-body"><div class="card-title h5">Barbero inicial SSR</div></div></div></div></div>`);
       return html.replace('</div><!-- SEO_PRERENDER_END -->', `${script}</div><!-- SEO_PRERENDER_END -->`);
     } }, configureServer(vite) {
       vite.middlewares.use((req, res, next) => {
         if (req.url === '/__seo_driver') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end('<html><head><meta charset="utf-8"></head><body><iframe width="390" height="844"></iframe><pre id="result">RUNNING</pre><script src="/__seo_test.js"></script></body></html>'); }
         if (req.url === '/__seo_test.js') { res.setHeader('Content-Type', 'text/javascript; charset=utf-8'); return res.end(driver); }
+        if (req.url === '/test-barber.svg') { res.setHeader('Content-Type', 'image/svg+xml'); return res.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 6"><rect width="8" height="6" fill="#333"/></svg>'); }
         if (req.url === '/__catalog_counts') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify(catalogRequests)); }
         if (!req.url.startsWith('/api/')) return next();
         res.setHeader('Content-Type', 'application/json');
         if (req.url === '/api/auth/me') { res.statusCode = 401; return res.end('{"error":"No autenticado"}'); }
         if (req.method !== 'GET') { res.statusCode = 405; return res.end('{"error":"Solo lecturas simuladas"}'); }
         if (req.url.startsWith('/api/services')) { catalogRequests.services++; return res.end('[{"id":1,"active":true,"name":"Corte API","price":"1000.00"}]'); }
-        if (req.url.startsWith('/api/barbers')) { catalogRequests.barbers++; return res.end('[{"id":1,"active":true,"name":"Ana API"}]'); }
+        if (req.url.startsWith('/api/barbers')) { catalogRequests.barbers++; return res.end('[{"id":1,"active":true,"name":"Ana API","image":"/test-barber.svg"}]'); }
         return res.end('{}');
       });
     } }] });
